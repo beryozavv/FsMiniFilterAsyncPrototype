@@ -4,6 +4,6 @@ namespace ClientPrototype.Abstractions;
 
 public interface INotificationFlow
 {
-    Task PostAsync(MarkReaderNotification request);
+    Task PostAsync(RequestNotification request);
     void Complete();
 }

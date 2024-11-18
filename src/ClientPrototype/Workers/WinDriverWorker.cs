@@ -1,7 +1,7 @@
 ﻿using ClientPrototype.Abstractions;
 using ClientPrototype.Dto;
 
-namespace ClientPrototype.Clients;
+namespace ClientPrototype.Workers;
 
 internal class WinDriverWorker : IDriverWorker
 {
@@ -16,12 +16,15 @@ internal class WinDriverWorker : IDriverWorker
 
     public async Task Watch(CancellationToken cancellationToken)
     {
+        _driverClient.ReadNotification();
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                MarkReaderNotification readerNotification = _driverClient.ReadNotification();
+                var readerNotification = _driverClient.ReadAsyncNotification();
                 await _dataFlowPrototype.PostAsync(readerNotification);
+                
+                _driverClient.ReadNotification();
             }
         }
         finally

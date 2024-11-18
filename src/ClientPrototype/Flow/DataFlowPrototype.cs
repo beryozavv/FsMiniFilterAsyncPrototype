@@ -1,23 +1,24 @@
-﻿using System.Threading.Tasks.Dataflow;
+﻿using System.Text;
+using System.Threading.Tasks.Dataflow;
 using ClientPrototype.Abstractions;
 using ClientPrototype.Dto;
+using Microsoft.Extensions.Logging;
 
 namespace ClientPrototype.Flow;
 
 internal class DataFlowPrototype : INotificationFlow
 {
-    private readonly BufferBlock<MarkReaderNotification> _bufferBlock;
-    private readonly TransformBlock<MarkReaderNotification, MarkReaderReply> _transformBlock;
-    private readonly ActionBlock<MarkReaderReply> _responseBlock;
+    private readonly ILogger<DataFlowPrototype> _logger;
+    private readonly BufferBlock<RequestNotification> _bufferBlock;
+    private readonly TransformBlock<RequestNotification, ReplyNotification> _transformBlock;
+    private readonly ActionBlock<ReplyNotification> _responseBlock;
     private readonly IDriverClient _driverClient;
 
-    public DataFlowPrototype(IDriverClient driverClient)
+    public DataFlowPrototype(IDriverClient driverClient, ILogger<DataFlowPrototype> logger)
     {
         _driverClient = driverClient;
-        _bufferBlock = new()
-        {
-            
-        };
+        _logger = logger;
+        _bufferBlock = new();
         _transformBlock = new(ProcessRequest);
         _responseBlock = new(SendResponseToDriver);
 
@@ -25,27 +26,41 @@ internal class DataFlowPrototype : INotificationFlow
         {
             PropagateCompletion = true
         });
-        _transformBlock.LinkTo(_responseBlock);
+        _transformBlock.LinkTo(_responseBlock, new()
+        {
+            PropagateCompletion = true
+        });
     }
 
-    public async Task PostAsync(MarkReaderNotification request)
+    public async Task PostAsync(RequestNotification request)
     {
+        _logger.LogInformation("Posting mark reader.");
         await _bufferBlock.SendAsync(request);
     }
-    
+
     public void Complete() => _bufferBlock.Complete();
 
-    private MarkReaderReply ProcessRequest(MarkReaderNotification notification)
+    private ReplyNotification ProcessRequest(RequestNotification notification)
     {
-        var random = new Random();
-        var processResult = random.NextInt64(0, 2);
-        var rights = processResult > 0 ? (byte)0 : (byte)1;
+        _logger.LogInformation("Processing mark reader");
+        var r = Encoding.Convert(Encoding.Unicode, Encoding.UTF8, notification.Contents);
+        var stringBuffer = Encoding.UTF8.GetString(r);
+        
+        _logger.LogInformation("Content from buffer: {message}", stringBuffer);
 
-        return new(rights);
+        return new(notification.MessageId, 0);
     }
 
-    private void SendResponseToDriver(MarkReaderReply reply)
+    private void SendResponseToDriver(ReplyNotification reply)
     {
-        _driverClient.Reply(reply);
+        _logger.LogInformation("Sending reply: rights - {reply}", reply.Rights);
+        try
+        {
+            _driverClient.Reply(reply);
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e, "Failed to send reply");
+        }
     }
 }

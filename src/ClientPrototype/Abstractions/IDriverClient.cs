@@ -5,17 +5,22 @@ namespace ClientPrototype.Abstractions;
 public interface IDriverClient
 {
     /// <summary>
-    /// Получить сообщение от драйвера
+    /// Прочитать сообщение от драйвера
+    /// </summary>
+    void ReadNotification();
+
+    /// <summary>
+    /// Получить сообщение из асинхронной очереди
     /// </summary>
     /// <returns></returns>
-    MarkReaderNotification ReadNotification();
+    RequestNotification ReadAsyncNotification();
 
     /// <summary>
     /// Ответить драйверу
     /// </summary>
-    /// <param name="reply"></param>
+    /// <param name="reply">Ответ драйверу</param>
     /// <returns></returns>
-    uint Reply(MarkReaderReply reply);
+    uint Reply(ReplyNotification reply);
 
     void Disconnect(CancellationToken token);
 }

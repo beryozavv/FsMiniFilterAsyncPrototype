@@ -1,6 +1,7 @@
 using ClientPrototype.Abstractions;
 using ClientPrototype.Dto;
 using ClientPrototype.Flow;
+using Microsoft.Extensions.Logging;
 using Moq;
 using Xunit.Abstractions;
 
@@ -21,18 +22,13 @@ public class DataFlowTest
         _output.WriteLine("Test1");
 
         Mock<IDriverClient> messageManager = new();
-        messageManager.Setup(mm => mm.ReadNotification())
+        messageManager.Setup(mm => mm.ReadAsyncNotification())
             .Returns(() =>
             {
                 _output.WriteLine("Buffer block");
-                return new()
-                {
-                    Contents = Array.Empty<byte>(),
-                    Reserved = 0,
-                    Size = 0
-                };
+                return new(1, []);
             });
-        messageManager.Setup(mm => mm.Reply(It.IsAny<MarkReaderReply>()))
+        messageManager.Setup(mm => mm.Reply(It.IsAny<ReplyNotification>()))
             .Returns(() =>
             {
                 _output.WriteLine("Reply");
@@ -40,16 +36,11 @@ public class DataFlowTest
             });
 
 
-        var flow = new DataFlowPrototype(messageManager.Object);
+        var flow = new DataFlowPrototype(messageManager.Object, Mock.Of<ILogger<DataFlowPrototype>>());
 
         for (int i = 0; i < 10; i++)
         {
-            await flow.PostAsync(new()
-            {
-                Contents = Array.Empty<byte>(),
-                Reserved = 0,
-                Size = 0
-            });
+            await flow.PostAsync(new(1, []));
         }
 
         flow.Complete();

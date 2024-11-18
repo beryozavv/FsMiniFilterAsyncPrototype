@@ -1,8 +1,8 @@
 ﻿using ClientPrototype.Abstractions;
 using ClientPrototype.Clients;
 using ClientPrototype.Flow;
-using ClientPrototype.Managers;
 using ClientPrototype.Settings;
+using ClientPrototype.Workers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 

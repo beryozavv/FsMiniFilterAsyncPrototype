@@ -2,7 +2,13 @@
 
 namespace ClientPrototype.Dto;
 
-[StructLayout(LayoutKind.Sequential)]
+public struct MarkReaderReplyMessage
+{
+    public FilterReplyHeader ReplyHeader;
+    public MarkReaderReply Reply;
+}
+
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct MarkReaderReply
 {
     /// <summary>
@@ -15,4 +21,12 @@ public struct MarkReaderReply
     {
         Rights = rights;
     }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public struct FilterReplyHeader
+{
+    public ulong MessageId;
+    public uint Status;
+    public uint Reserved;
 }
