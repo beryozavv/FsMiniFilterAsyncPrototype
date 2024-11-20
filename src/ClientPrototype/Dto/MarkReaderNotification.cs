@@ -14,17 +14,21 @@ public struct MarkReaderMessage
 [StructLayout(LayoutKind.Sequential)]
 public struct MarkReaderNotification
 {
+    [MarshalAs(UnmanagedType.U4)]
     public uint Size;
+    [MarshalAs(UnmanagedType.U4)]
     public uint Reserved;
 
     [MarshalAs(UnmanagedType.ByValArray, SizeConst = DriverConstants.MarkReaderReadBufferSize)]
     public byte[] Contents;
 }
 
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct FilterMessageHeader
 {
-    public ulong ReplyLength;
+    [MarshalAs(UnmanagedType.U4)]
+    public uint ReplyLength;
+    [MarshalAs(UnmanagedType.U8)]
     public ulong MessageId;
 }
 

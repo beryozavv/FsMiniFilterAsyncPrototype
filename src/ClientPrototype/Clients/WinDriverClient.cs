@@ -67,9 +67,7 @@ internal class WinDriverClient : IDriverClient
 
         int offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
         MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(pOvlp - offset);
-
-        var messageId = (ulong)Marshal.ReadInt64(pOvlp, 0 + sizeof(uint));
-        var notification = new RequestNotification(messageId, message.Notification.Contents);
+        var notification = new RequestNotification(message.MessageHeader.MessageId, message.Notification.Contents);
         return notification;
     }
 
