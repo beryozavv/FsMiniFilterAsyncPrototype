@@ -32,10 +32,10 @@ internal class DataFlowPrototype : INotificationFlow
         });
     }
 
-    public async Task PostAsync(RequestNotification request)
+    public async Task PostAsync(RequestNotification request, CancellationToken token)
     {
         _logger.LogInformation("Posting mark reader.");
-        await _bufferBlock.SendAsync(request);
+        await _bufferBlock.SendAsync(request, token);
     }
 
     public void Complete() => _bufferBlock.Complete();

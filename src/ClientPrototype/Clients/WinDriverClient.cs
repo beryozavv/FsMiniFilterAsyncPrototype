@@ -20,6 +20,9 @@ internal class WinDriverClient : IDriverClient
     private SafeFileHandle _portHandle;
     private IntPtr _completionPort;
 
+    private IntPtr _msgPtr;
+    private NativeOverlapped _overlapped;
+
     public WinDriverClient(IOptions<DriverSettings> driverSettings, ILogger<WinDriverClient> logger)
     {
         _logger = logger;
@@ -32,13 +35,15 @@ internal class WinDriverClient : IDriverClient
     public void ReadNotification()
     {
         // Предварительная инициализация FilterGetMessage
-        var msgSize = Marshal.SizeOf(typeof(MarkReaderMessage));
+        var msgSize = Marshal.SizeOf<MarkReaderMessage>();
         var msgPtr = Marshal.AllocHGlobal(msgSize);
-        Marshal.StructureToPtr(new MarkReaderMessage(), msgPtr, false);
 
         var overlapped = new NativeOverlapped();
-        var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)msgSize, ref overlapped);
+        int offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
+        var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)offset, ref overlapped);
+        _overlapped = overlapped;
 
+        _msgPtr = msgPtr;
         if (result != DriverConstants.ErrorIoPending)
         {
             var lastError = Marshal.GetLastWin32Error();
@@ -54,9 +59,9 @@ internal class WinDriverClient : IDriverClient
         UIntPtr key;
         IntPtr pOvlp;
 
-        if (!WindowsNativeMethods.GetQueuedCompletionStatus(_completionPort, 
+        if (!WindowsNativeMethods.GetQueuedCompletionStatus(_completionPort,
             out var bytesTransferred,
-            out var completionKey, 
+            out var completionKey,
             out pOvlp,
             uint.MaxValue))
         {
@@ -66,7 +71,17 @@ internal class WinDriverClient : IDriverClient
         }
 
         int offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
-        MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(pOvlp - offset);
+        IntPtr structPtr = IntPtr.Subtract(pOvlp, offset);
+        MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(structPtr);
+
+        byte[] rawData = new byte[Marshal.SizeOf<MarkReaderMessage>()];
+        Marshal.Copy(structPtr, rawData, 0, rawData.Length);
+        Console.WriteLine(BitConverter.ToString(rawData));
+
+        FilterMessageHeader headerM = Marshal.PtrToStructure<FilterMessageHeader>(structPtr);
+        MarkReaderNotification notificationM = Marshal.PtrToStructure<MarkReaderNotification>(
+            IntPtr.Add(structPtr, Marshal.OffsetOf<MarkReaderMessage>("Notification").ToInt32()));
+
         var notification = new RequestNotification(message.MessageHeader.MessageId, message.Notification.Contents);
         return notification;
     }
@@ -77,12 +92,12 @@ internal class WinDriverClient : IDriverClient
         {
             ReplyHeader = new()
             {
-                MessageId =  reply.MessageId,
+                MessageId = reply.MessageId,
                 Status = reply.Status
             },
             Reply = new(reply.Rights)
         };
-        
+
         var replySize = Marshal.SizeOf(replyMessage);
         IntPtr replyBuffer = Marshal.AllocHGlobal(replySize);
         Marshal.StructureToPtr(replyMessage, replyBuffer, false);
@@ -138,7 +153,7 @@ internal class WinDriverClient : IDriverClient
             _portHandle,
             IntPtr.Zero,
             UIntPtr.Zero,
-            (uint)Environment.ProcessorCount
+            24
         );
 
         if (_completionPort == IntPtr.Zero)

@@ -22,7 +22,7 @@ internal class WinDriverWorker : IDriverWorker
             while (!cancellationToken.IsCancellationRequested)
             {
                 var readerNotification = _driverClient.ReadAsyncNotification();
-                await _dataFlowPrototype.PostAsync(readerNotification);
+                await _dataFlowPrototype.PostAsync(readerNotification, cancellationToken);
                 
                 _driverClient.ReadNotification();
             }

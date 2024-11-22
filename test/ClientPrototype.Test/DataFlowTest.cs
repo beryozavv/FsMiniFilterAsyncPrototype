@@ -40,7 +40,7 @@ public class DataFlowTest
 
         for (int i = 0; i < 10; i++)
         {
-            await flow.PostAsync(new(1, []));
+            await flow.PostAsync(new(1, []), CancellationToken.None);
         }
 
         flow.Complete();
