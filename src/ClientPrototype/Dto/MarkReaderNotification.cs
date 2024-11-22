@@ -27,7 +27,7 @@ public struct MarkReaderNotification
 public struct FilterMessageHeader
 {
     [MarshalAs(UnmanagedType.U4)]
-    public uint ReplyLength;
-    [MarshalAs(UnmanagedType.U8)]
-    public ulong MessageId;
+    public uint MessageId;
+    [MarshalAs(UnmanagedType.U4)]
+    public uint Reserved;
 }

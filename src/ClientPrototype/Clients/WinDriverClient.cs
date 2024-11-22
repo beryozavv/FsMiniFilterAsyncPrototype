@@ -32,7 +32,7 @@ internal class WinDriverClient : IDriverClient
         OpenConnection(_driverSettings.ConnectionName);
     }
 
-    public void ReadNotification()
+    public RequestNotification ReadNotification()
     {
         // Предварительная инициализация FilterGetMessage
         var msgSize = Marshal.SizeOf<MarkReaderMessage>();
@@ -40,17 +40,18 @@ internal class WinDriverClient : IDriverClient
 
         var overlapped = new NativeOverlapped();
         int offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
-        var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)offset, ref overlapped);
-        _overlapped = overlapped;
-
-        _msgPtr = msgPtr;
-        if (result != DriverConstants.ErrorIoPending)
+        var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)offset, IntPtr.Zero);
+        
+        if (result != DriverConstants.Ok)
         {
             var lastError = Marshal.GetLastWin32Error();
             Marshal.FreeHGlobal(msgPtr);
             throw new($"FilterGetMessage failed. Error code: 0x{lastError:X}");
         }
 
+        MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(msgPtr);
+        var notification = new RequestNotification(message.MessageHeader.MessageId, message.Notification.Contents);
+        return notification;
     }
 
     public RequestNotification ReadAsyncNotification()

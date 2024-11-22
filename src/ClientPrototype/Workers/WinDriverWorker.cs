@@ -16,12 +16,12 @@ internal class WinDriverWorker : IDriverWorker
 
     public async Task Watch(CancellationToken cancellationToken)
     {
-        _driverClient.ReadNotification();
         try
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                var readerNotification = _driverClient.ReadAsyncNotification();
+                // var readerNotification = _driverClient.ReadAsyncNotification();
+                var readerNotification = _driverClient.ReadNotification();
                 await _dataFlowPrototype.PostAsync(readerNotification, cancellationToken);
                 
                 _driverClient.ReadNotification();
