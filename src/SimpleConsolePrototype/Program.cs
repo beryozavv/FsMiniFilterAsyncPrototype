@@ -1,11 +1,12 @@
 ﻿using System.Runtime.InteropServices;
+using ClientPrototype.Dto;
 using Microsoft.Win32.SafeHandles;
 using SimpleConsolePrototype;
 using SimpleConsolePrototype.DriverMessage;
 
 
-const string portName = "\\MarkReaderPort";
-const uint bufferLength = 1076;
+const string portName = "\\MarkReaderPort"; // "\\DssFsMiniFilterPort"
+int bufferLength = Environment.SystemPageSize;
 SafeFileHandle portHandle;
 
 // Подключение к порту фильтра
@@ -57,9 +58,12 @@ void ProcessMessagesAsync(SafeFileHandle portHandle, IntPtr completionPort)
 
             ReadMessage();
             // process message
-
-            var reply = new DriverFullReplyMessage();
-            SendReply(portHandle, reply);
+            //
+            // var reply = new MarkReaderReplyMessage()
+            // {
+            //     
+            // };
+            // SendReply(portHandle, reply);
 
         }
         catch (Exception e)
@@ -72,7 +76,9 @@ void ProcessMessagesAsync(SafeFileHandle portHandle, IntPtr completionPort)
 
 void ReadMessage()
 {
-    IntPtr msgPtr = IntPtr.Zero;
+    Console.ReadLine();
+    //IntPtr msgPtr = IntPtr.Zero;
+    var msgPtr = Marshal.AllocHGlobal(bufferLength);
     uint hr = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, bufferLength,
         IntPtr.Zero);
     if (hr != DriverConstants.Ok)
@@ -91,6 +97,12 @@ void ReadMessage()
         (DriverNotificationHeader)Marshal.PtrToStructure(msgPtr, typeof(DriverNotificationHeader));
     msgPtr += Marshal.SizeOf(typeof(DriverNotificationHeader));
     //--------------------------------------------------------------------------------
+    
+    SendReply(portHandle, new MarkReaderReplyMessage
+    {
+        ReplyHeader = new FilterReplyHeader(){MessageId = (ulong)notificationHeader.MessageId, Status = 0},
+        Reply = new MarkReaderReply{Rights = 0}
+    });
 
     //--------------------------------------------------------------------------------
     // Data
@@ -119,37 +131,40 @@ void ReadMessage()
 
 }
 
-void SendReply(SafeFileHandle portHandle, DriverFullReplyMessage replyMessage)
+void SendReply(SafeFileHandle portHandle, MarkReaderReplyMessage replyMessage)
 {
     var messageSize = Marshal.SizeOf(replyMessage);
-    var replyHeaderSize = Marshal.SizeOf<DriverReplyHeader>();
-    var replyNotificationSize = Marshal.SizeOf<DriverNotificationData>();
+    var replyHeaderSize = Marshal.SizeOf<FilterReplyHeader>();
+    var replyNotificationSize = Marshal.SizeOf<MarkReaderReply>();
     var replyBufferPointer = Marshal.AllocHGlobal(Marshal.SizeOf(replyMessage));
 
     Marshal.Copy(new byte[messageSize], 0, replyBufferPointer, messageSize);
 
     // Header
-    Marshal.StructureToPtr(replyMessage.Header, replyBufferPointer, true);
+    Marshal.StructureToPtr(replyMessage.ReplyHeader, replyBufferPointer, true);
     replyBufferPointer += replyHeaderSize;
 
     // Data
-    Marshal.StructureToPtr(replyMessage.Data, replyBufferPointer, true);
+    Marshal.StructureToPtr(replyMessage.Reply, replyBufferPointer, true);
     replyBufferPointer += replyNotificationSize;
 
-    // Volume
-    Marshal.Copy(replyMessage.VolumePartBytes, 0, replyBufferPointer, replyMessage.VolumePartBytes.Length);
-    replyBufferPointer += replyMessage.VolumePartBytes.Length;
-
-    // Path
-    Marshal.Copy(replyMessage.PathPartBytes, 0, replyBufferPointer, replyMessage.PathPartBytes.Length);
-    replyBufferPointer += replyMessage.PathPartBytes.Length;
-
-    // File
-    Marshal.Copy(replyMessage.FilePartBytes, 0, replyBufferPointer, replyMessage.FilePartBytes.Length);
-
-    // ReSharper disable once RedundantAssignment
-    // прямая запись в память через указатель на начало буфера
-    replyBufferPointer += replyMessage.FilePartBytes.Length;
+    // // Volume
+    // Marshal.Copy(replyMessage.VolumePartBytes, 0, replyBufferPointer, replyMessage.VolumePartBytes.Length);
+    // replyBufferPointer += replyMessage.VolumePartBytes.Length;
+    //
+    // // Path
+    // Marshal.Copy(replyMessage.PathPartBytes, 0, replyBufferPointer, replyMessage.PathPartBytes.Length);
+    // replyBufferPointer += replyMessage.PathPartBytes.Length;
+    //
+    // // File
+    // Marshal.Copy(replyMessage.FilePartBytes, 0, replyBufferPointer, replyMessage.FilePartBytes.Length);
+    //
+    // // ReSharper disable once RedundantAssignment
+    // // прямая запись в память через указатель на начало буфера
+    // replyBufferPointer += replyMessage.FilePartBytes.Length;
+    
+    replyBufferPointer = IntPtr.Subtract(replyBufferPointer, messageSize);
+    
     var hr = WindowsNativeMethods.FilterReplyMessage(
         portHandle,
         replyBufferPointer,

@@ -26,7 +26,7 @@ internal class WindowsNativeMethods
     public static extern uint FilterGetMessage(
         SafeFileHandle hPort,
         IntPtr lpMessageBuffer,
-        uint dwMessageBufferSize,
+        int dwMessageBufferSize,
         IntPtr lpOverlapped);
 
     [DllImport("kernel32.dll", SetLastError = true)]
