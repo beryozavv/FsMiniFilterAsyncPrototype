@@ -32,32 +32,31 @@ internal class WinDriverClient : IDriverClient
         OpenConnection(_driverSettings.ConnectionName);
     }
 
-    public RequestNotification ReadNotification()
+    public void ReadNotification()
     {
         // Предварительная инициализация FilterGetMessage
         var msgSize = Marshal.SizeOf<MarkReaderMessage>();
         var msgPtr = Marshal.AllocHGlobal(msgSize);
 
         var overlapped = new NativeOverlapped();
-        int offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
-        var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)offset, IntPtr.Zero);
+        var offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
         
-        if (result != DriverConstants.Ok)
+        var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)msgSize, IntPtr.Add(msgPtr, offset));
+        
+        if (result != DriverConstants.ErrorIoPending)
         {
             var lastError = Marshal.GetLastWin32Error();
             Marshal.FreeHGlobal(msgPtr);
             throw new($"FilterGetMessage failed. Error code: 0x{lastError:X}");
         }
 
-        MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(msgPtr);
-        var notification = new RequestNotification(message.MessageHeader.MessageId, message.Notification.Contents);
-        return notification;
+        // MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(msgPtr);
+        // var notification = new RequestNotification(message.MessageHeader.MessageId, message.Notification.Contents);
+        //return notification;
     }
 
     public RequestNotification ReadAsyncNotification()
     {
-        uint outSize;
-        UIntPtr key;
         IntPtr pOvlp;
 
         if (!WindowsNativeMethods.GetQueuedCompletionStatus(_completionPort,
@@ -73,23 +72,32 @@ internal class WinDriverClient : IDriverClient
 
         int offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
         IntPtr structPtr = IntPtr.Subtract(pOvlp, offset);
-        MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(structPtr);
+        //MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(structPtr);
+        FilterMessageHeader header =
+            (FilterMessageHeader)Marshal.PtrToStructure(structPtr, typeof(FilterMessageHeader));
+        structPtr += Marshal.SizeOf(typeof(FilterMessageHeader));
+        //--------------------------------------------------------------------------------
+    
+        MarkReaderNotification notification =
+            (MarkReaderNotification)Marshal.PtrToStructure(structPtr, typeof(MarkReaderNotification));
 
-        byte[] rawData = new byte[Marshal.SizeOf<MarkReaderMessage>()];
-        Marshal.Copy(structPtr, rawData, 0, rawData.Length);
-        Console.WriteLine(BitConverter.ToString(rawData));
+        IntPtr.Subtract(structPtr, Marshal.SizeOf(typeof(FilterMessageHeader)));
 
-        FilterMessageHeader headerM = Marshal.PtrToStructure<FilterMessageHeader>(structPtr);
-        MarkReaderNotification notificationM = Marshal.PtrToStructure<MarkReaderNotification>(
-            IntPtr.Add(structPtr, Marshal.OffsetOf<MarkReaderMessage>("Notification").ToInt32()));
+        // byte[] rawData = new byte[Marshal.SizeOf<MarkReaderMessage>()];
+        // Marshal.Copy(structPtr, rawData, 0, rawData.Length);
+        // Console.WriteLine(BitConverter.ToString(rawData));
+        //
+        // FilterMessageHeader headerM = Marshal.PtrToStructure<FilterMessageHeader>(structPtr);
+        // MarkReaderNotification notificationM = Marshal.PtrToStructure<MarkReaderNotification>(
+        //     IntPtr.Add(structPtr, Marshal.OffsetOf<MarkReaderMessage>("Notification").ToInt32()));
 
-        var notification = new RequestNotification(message.MessageHeader.MessageId, message.Notification.Contents);
-        return notification;
+        var notificationRes = new RequestNotification(header.MessageId, notification.Contents);
+        return notificationRes;
     }
 
     public uint Reply(ReplyNotification reply)
     {
-        var replyMessage = new MarkReaderReplyMessage()
+        var replyMessage = new MarkReaderReplyMessage
         {
             ReplyHeader = new()
             {

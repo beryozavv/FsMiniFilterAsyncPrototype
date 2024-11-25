@@ -12,13 +12,13 @@ internal struct DriverNotificationHeader
     /// Максимальная длина ответа на сообщение.
     /// </summary>
     [MarshalAs(UnmanagedType.U4)]
-    public int ReplyLength;
+    public uint ReplyLength;
 
     /// <summary>
     /// Номер сообщения.
     /// Высталвяется драйвером. В ответе должен быть тот же номер.
     /// </summary>
     [MarshalAs(UnmanagedType.U8)]
-    public long MessageId;
+    public ulong MessageId;
 }
 

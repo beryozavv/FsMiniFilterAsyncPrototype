@@ -9,7 +9,7 @@ public struct MarkReaderReplyMessage
     public MarkReaderReply Reply;
 }
 
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
+[StructLayout(LayoutKind.Sequential)]
 public struct MarkReaderReply
 {
     /// <summary>
@@ -24,7 +24,7 @@ public struct MarkReaderReply
     }
 }
 
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
+[StructLayout(LayoutKind.Sequential)]
 public struct FilterReplyHeader
 {
     [MarshalAs(UnmanagedType.U4)]

@@ -7,7 +7,7 @@ public interface IDriverClient
     /// <summary>
     /// Прочитать сообщение от драйвера
     /// </summary>
-    RequestNotification ReadNotification();
+    void ReadNotification();
 
     /// <summary>
     /// Получить сообщение из асинхронной очереди

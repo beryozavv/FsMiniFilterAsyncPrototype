@@ -43,8 +43,8 @@ internal class DataFlowPrototype : INotificationFlow
     private ReplyNotification ProcessRequest(RequestNotification notification)
     {
         _logger.LogInformation("Processing mark reader");
-        var r = Encoding.Convert(Encoding.Unicode, Encoding.UTF8, notification.Contents);
-        var stringBuffer = Encoding.UTF8.GetString(r);
+        //var r = Encoding.Convert(Encoding.Unicode, Encoding.UTF8, notification.Contents);
+        var stringBuffer = Encoding.ASCII.GetString(notification.Contents);
         
         _logger.LogInformation("Content from buffer: {message}", stringBuffer);
 
