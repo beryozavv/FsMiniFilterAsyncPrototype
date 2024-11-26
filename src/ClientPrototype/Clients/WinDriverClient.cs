@@ -20,9 +20,6 @@ internal class WinDriverClient : IDriverClient
     private SafeFileHandle _portHandle;
     private IntPtr _completionPort;
 
-    private IntPtr _msgPtr;
-    private NativeOverlapped _overlapped;
-
     public WinDriverClient(IOptions<DriverSettings> driverSettings, ILogger<WinDriverClient> logger)
     {
         _logger = logger;
@@ -35,11 +32,12 @@ internal class WinDriverClient : IDriverClient
     public void ReadNotification()
     {
         // Предварительная инициализация FilterGetMessage
-        var msgSize = Marshal.SizeOf<MarkReaderMessage>();
+        int msgSize = Marshal.SizeOf<MarkReaderMessage>(); //Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
         var msgPtr = Marshal.AllocHGlobal(msgSize);
 
         var overlapped = new NativeOverlapped();
-        IntPtr overlappedPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NativeOverlapped>());
+        int ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
+        IntPtr overlappedPtr = IntPtr.Add(msgPtr, ovlpOffset); //Marshal.AllocHGlobal(Marshal.SizeOf<NativeOverlapped>());
         Marshal.StructureToPtr(overlapped, overlappedPtr, false);
         
         var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)msgSize, overlappedPtr);
@@ -82,7 +80,7 @@ internal class WinDriverClient : IDriverClient
         MarkReaderNotification notification =
             (MarkReaderNotification)Marshal.PtrToStructure(structPtr, typeof(MarkReaderNotification));
 
-        IntPtr.Subtract(structPtr, Marshal.SizeOf(typeof(FilterMessageHeader)));
+        structPtr = IntPtr.Subtract(structPtr, Marshal.SizeOf(typeof(FilterMessageHeader)));
 
         // byte[] rawData = new byte[Marshal.SizeOf<MarkReaderMessage>()];
         // Marshal.Copy(structPtr, rawData, 0, rawData.Length);
@@ -110,13 +108,14 @@ internal class WinDriverClient : IDriverClient
 
         var replySize = Marshal.SizeOf(replyMessage);
         IntPtr replyBuffer = Marshal.AllocHGlobal(replySize);
-        Marshal.StructureToPtr(replyMessage, replyBuffer, false);
+        Marshal.StructureToPtr(replyMessage, replyBuffer, true);
         var hr = WindowsNativeMethods.FilterReplyMessage(
             _portHandle,
             replyBuffer,
-            (uint)Marshal.SizeOf<MarkReaderReply>());
+            (uint)replySize);
         Marshal.FreeHGlobal(replyBuffer);
 
+        Console.WriteLine(hr.ToString("X"));
         if (hr != 0)
         {
             throw new($"ERROR: Failed to send reply. HRESULT: 0x{hr:X}");

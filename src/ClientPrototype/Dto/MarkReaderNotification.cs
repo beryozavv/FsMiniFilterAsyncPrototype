@@ -3,7 +3,7 @@ using ClientPrototype.Constants;
 
 namespace ClientPrototype.Dto;
 
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct MarkReaderMessage
 {
     public FilterMessageHeader MessageHeader;
@@ -11,7 +11,7 @@ public struct MarkReaderMessage
     public NativeOverlapped Ovlp;               // OVERLAPPED структура
 }
 
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct MarkReaderNotification
 {
     [MarshalAs(UnmanagedType.U4)]
@@ -25,7 +25,7 @@ public struct MarkReaderNotification
     // public string Contents;
 }
 
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 8)]
 public struct FilterMessageHeader
 {
     /// <summary>
