@@ -39,9 +39,10 @@ internal class WinDriverClient : IDriverClient
         var msgPtr = Marshal.AllocHGlobal(msgSize);
 
         var overlapped = new NativeOverlapped();
-        var offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
+        IntPtr overlappedPtr = Marshal.AllocHGlobal(Marshal.SizeOf<NativeOverlapped>());
+        Marshal.StructureToPtr(overlapped, overlappedPtr, false);
         
-        var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)msgSize, IntPtr.Add(msgPtr, offset));
+        var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)msgSize, overlappedPtr);
         
         if (result != DriverConstants.ErrorIoPending)
         {

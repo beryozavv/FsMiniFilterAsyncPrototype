@@ -3,7 +3,7 @@ using ClientPrototype.Constants;
 
 namespace ClientPrototype.Dto;
 
-[StructLayout(LayoutKind.Sequential, Pack = 1)]
+[StructLayout(LayoutKind.Sequential)]
 public struct MarkReaderMessage
 {
     public FilterMessageHeader MessageHeader;

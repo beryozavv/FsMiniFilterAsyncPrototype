@@ -97,19 +97,19 @@ void ReadMessage()
         throw new Exception($"Error FilterGetMessage. Code: 0x{hr:X8}");
     }
 
-    // MarkReaderMessage message = (MarkReaderMessage)Marshal.PtrToStructure(msgPtr, typeof(MarkReaderMessage));
-    // var markReaderNotification = message.Notification;
-    // var notificationHeader = message.MessageHeader;
-    DriverNotificationHeader notificationHeader =
-        (DriverNotificationHeader)Marshal.PtrToStructure(msgPtr, typeof(DriverNotificationHeader));
-    msgPtr += Marshal.SizeOf(typeof(DriverNotificationHeader));
-    //--------------------------------------------------------------------------------
-    
-    MarkReaderNotification markReaderNotification =
-        (MarkReaderNotification)Marshal.PtrToStructure(msgPtr, typeof(MarkReaderNotification));
+    var message = (MarkReaderMessage)Marshal.PtrToStructure(msgPtr, typeof(MarkReaderMessage));
+    var markReaderNotification = message.Notification;
+    var notificationHeader = message.MessageHeader;
+    // DriverNotificationHeader notificationHeader =
+    //     (DriverNotificationHeader)Marshal.PtrToStructure(msgPtr, typeof(DriverNotificationHeader));
+    // msgPtr += Marshal.SizeOf(typeof(DriverNotificationHeader));
+    // //--------------------------------------------------------------------------------
+    //
+    // MarkReaderNotification markReaderNotification =
+    //     (MarkReaderNotification)Marshal.PtrToStructure(msgPtr, typeof(MarkReaderNotification));
+    //
+    // IntPtr.Subtract(msgPtr, Marshal.SizeOf(typeof(DriverNotificationHeader)));
 
-    IntPtr.Subtract(msgPtr, Marshal.SizeOf(typeof(DriverNotificationHeader)));
-    //Marshal.FreeHGlobal(msgPtr);
 
     var codeArr = string.Join('-', markReaderNotification.Contents);
     var bitContent = BitConverter.ToString(markReaderNotification.Contents);
@@ -152,22 +152,22 @@ void ReadMessage()
 void SendReply(SafeFileHandle portHandle, MarkReaderReplyMessage replyMessage)
 {
     var messageSize = Marshal.SizeOf(replyMessage);
-    var replyHeaderSize = Marshal.SizeOf<FilterReplyHeader>();
-    var replyNotificationSize = Marshal.SizeOf<MarkReaderReply>();
+    // var replyHeaderSize = Marshal.SizeOf<FilterReplyHeader>();
+    // var replyNotificationSize = Marshal.SizeOf<MarkReaderReply>();
     var replyBufferPointer = Marshal.AllocHGlobal(messageSize);
 
-    //Marshal.StructureToPtr(replyMessage, replyBufferPointer, true);
+    Marshal.StructureToPtr(replyMessage, replyBufferPointer, true);
     // Marshal.Copy(new byte[messageSize], 0, replyBufferPointer, messageSize);
     //
     // Header
-    Marshal.StructureToPtr(replyMessage.ReplyHeader, replyBufferPointer, true);
-    replyBufferPointer += replyHeaderSize;
-    
-    // Data
-    Marshal.StructureToPtr(replyMessage.Reply, replyBufferPointer, true);
-    replyBufferPointer += replyNotificationSize;
-    
-    replyBufferPointer = IntPtr.Subtract(replyBufferPointer, messageSize);
+    // // Marshal.StructureToPtr(replyMessage.ReplyHeader, replyBufferPointer, true);
+    // // replyBufferPointer += replyHeaderSize;
+    // //
+    // // // Data
+    // // Marshal.StructureToPtr(replyMessage.Reply, replyBufferPointer, true);
+    // // replyBufferPointer += replyNotificationSize;
+    //
+    // replyBufferPointer = IntPtr.Subtract(replyBufferPointer, messageSize);
 
     // // Volume
     // Marshal.Copy(replyMessage.VolumePartBytes, 0, replyBufferPointer, replyMessage.VolumePartBytes.Length);
@@ -188,8 +188,8 @@ void SendReply(SafeFileHandle portHandle, MarkReaderReplyMessage replyMessage)
         portHandle,
         replyBufferPointer,
         (uint)messageSize);
-    
+
     Console.WriteLine($"reply result = {hr:X}");
-    
+
     Marshal.FreeHGlobal(replyBufferPointer);
 }
