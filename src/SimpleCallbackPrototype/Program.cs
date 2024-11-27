@@ -17,6 +17,8 @@ class Program
     static int ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
     private static int replySize = Marshal.SizeOf<MarkReaderReplyMessage>();
 
+    private static readonly CancellationTokenSource _cts = new();
+
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr CreateEvent(IntPtr lpEventAttributes, bool bManualReset, bool bInitialState,
         string lpName);
@@ -45,57 +47,69 @@ class Program
 
     private static void ReadMessages(SafeFileHandle portHandle)
     {
-        while (true)
+        for (int i = 0; i < 5; i++)
         {
-            IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
-            if (hEvent == IntPtr.Zero)
-            {
-                throw new Exception("Не удалось создать событие.");
-            }
+            ReadMessage(portHandle);
+        }
+        CancellationToken cancellationToken = _cts.Token;
+        while (cancellationToken.IsCancellationRequested == false)
+        {
+        }
+        Console.WriteLine("Cancellation requested");
+    }
 
-            var ovlp = new NativeOverlapped()
-            {
-                EventHandle = hEvent
-            };
+    private static void ReadMessage(SafeFileHandle handle)
+    {
+        IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
+        if (hEvent == IntPtr.Zero)
+        {
+            throw new Exception("Не удалось создать событие.");
+        }
 
-            var msgPtr = Marshal.AllocHGlobal(msgSize);
-            IntPtr ovlpPtr = IntPtr.Add(msgPtr, ovlpOffset);
-            Marshal.StructureToPtr(ovlp, ovlpPtr, false);
+        var ovlp = new NativeOverlapped()
+        {
+            EventHandle = hEvent
+        };
 
-            uint ioResult = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, (uint)msgSize, ovlpPtr);
+        var msgPtr = Marshal.AllocHGlobal(msgSize);
+        IntPtr ovlpPtr = IntPtr.Add(msgPtr, ovlpOffset);
+        Marshal.StructureToPtr(ovlp, ovlpPtr, false);
 
-            // Рабочий код:
-            // var msgPtr = Marshal.AllocHGlobal(msgSize);
-            //
-            // IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
-            //
-            // if (hEvent == IntPtr.Zero)
-            // {
-            //     throw new Exception("Не удалось создать событие.");
-            // }
-            //
-            // var overlapped = new NativeOverlapped
-            // {
-            //     EventHandle = hEvent
-            // };
-            //
-            // IntPtr overlappedPtr = IntPtr.Add(msgPtr, ovlpOffset);
-            // Marshal.StructureToPtr(overlapped, overlappedPtr, false);
+        uint ioResult = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, (uint)msgSize, ovlpPtr);
 
-            //var result = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, (uint)msgSize, overlappedPtr);
+        // Рабочий код:
+        /*var msgPtr = Marshal.AllocHGlobal(msgSize);
 
-            if (ioResult != DriverConstants.ErrorIoPending)
-            {
-                var lastError = Marshal.GetLastWin32Error();
-                Marshal.FreeHGlobal(msgPtr);
-                throw new($"FilterGetMessage failed. Error code: 0x{lastError:X}");
-            }
-            else
-            {
-                // todo здесь подозрительно много считываний в цикле?
-                Console.WriteLine($"Async Get Result = {ioResult.ToString("X")} ThreadId = {Thread.CurrentThread.ManagedThreadId}");
-                RegisterCallback(ovlp.EventHandle, msgPtr);
-            }
+        IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
+
+        if (hEvent == IntPtr.Zero)
+        {
+            throw new Exception("Не удалось создать событие.");
+        }
+
+        var ovlp = new NativeOverlapped
+        {
+            EventHandle = hEvent
+        };
+
+        IntPtr ovlpPtr = IntPtr.Add(msgPtr, ovlpOffset);
+        Marshal.StructureToPtr(ovlp, ovlpPtr, false);
+
+        var ioResult = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, (uint)msgSize, ovlpPtr);*/
+
+        if (ioResult != DriverConstants.ErrorIoPending)
+        {
+            var lastError = Marshal.GetLastWin32Error();
+            Marshal.FreeHGlobal(msgPtr);
+            _cts.Cancel();
+            throw new($"FilterGetMessage failed. Error code: 0x{lastError:X}");
+        }
+        else
+        {
+            // todo здесь подозрительно много считываний в цикле?
+            Console.WriteLine($"Async Get Result = {ioResult:X} ThreadId = {Thread.CurrentThread.ManagedThreadId}");
+            Console.WriteLine($"Registrating callback for event {ovlp.EventHandle.ToInt32():X}");
+            RegisterCallback(ovlp.EventHandle, msgPtr);
         }
     }
 
@@ -105,8 +119,15 @@ class Program
 
         var reply = new MarkReaderReplyMessage
         {
-            ReplyHeader = new FilterReplyHeader { MessageId = result.MessageHeader.MessageId, Status = 0 },
-            Reply = new MarkReaderReply { Rights = (byte)rights }
+            ReplyHeader = new FilterReplyHeader
+            {
+                MessageId = result.MessageHeader.MessageId,
+                Status = 0
+            },
+            Reply = new MarkReaderReply
+            {
+                Rights = (byte)rights
+            }
         };
 
         var replyBuffer = Marshal.AllocHGlobal(replySize);
@@ -118,15 +139,23 @@ class Program
         Marshal.FreeHGlobal(replyBuffer);
 
         Console.WriteLine(
-            $"Message {reply.ReplyHeader.MessageId} Reply status = {hr.ToString("X")}; Rights={rights}; c[0]={result.Notification.Contents[0]}; c[1]={result.Notification.Contents[1]}");
+            $"Message {reply.ReplyHeader.MessageId} Reply status = {hr:X}; Rights={rights}; c[0]={result.Notification.Contents[0]}; c[1]={result.Notification.Contents[1]}");
+        if (hr != DriverConstants.Ok)
+        {
+            _cts.Cancel();
+        }
     }
 
     private static void RegisterCallback(IntPtr hEvent, IntPtr state)
     {
+        var callbackState = new CallbackState
+        {
+            MsgPtr = state
+        };
         RegisteredWaitHandle regWaitHandle = null;
-        regWaitHandle = ThreadPool.RegisterWaitForSingleObject(
+        callbackState.waitHandle = ThreadPool.RegisterWaitForSingleObject(
             new WaitHandleSafe(hEvent),
-            /*static*/ (state, timedOut) =>
+            /*/*static#1# (state, timedOut) =>
             {
                 var callbackState = (CallbackState)state;
                 try
@@ -143,15 +172,49 @@ class Program
                     regWaitHandle.Unregister(null); // todo это без замыкания не работает или не инициализируется или уничтожается..
                     //callbackState.waitHandle.Unregister(null);
                 }
-            },
-            new CallbackState(state, regWaitHandle)
-            ,
+            }*/
+            WaitProc,
+            callbackState,
             -1,
             true
         );
+        Console.WriteLine($"Callback registered for event {hEvent.ToInt32():X}");
     }
 
-    record CallbackState(IntPtr MsgPtr, RegisteredWaitHandle waitHandle);
+    private static void WaitProc(object? state, bool timedOut)
+    {
+        var callbackState = (CallbackState?)state;
+        if (callbackState == null)
+        {
+            return;
+        }
+        if (callbackState.waitHandle == null)
+        {
+            Console.WriteLine("waitHandle is null");
+            _cts.Cancel();
+            return;
+        }
+        try
+        {
+            var message = Marshal.PtrToStructure<MarkReaderMessage>(callbackState.MsgPtr);
+            var contentString = Encoding.UTF8.GetString(message.Notification.Contents);
+            Console.WriteLine($"{message.MessageHeader.MessageId}; ThreadId = {Thread.CurrentThread.ManagedThreadId} \n Content: {contentString}");
+
+            // todo call dataflow
+            SendReplyToMessage(message);
+            ReadMessage(portHandle);
+        }
+        finally
+        {
+            callbackState.waitHandle.Unregister(null);
+        }
+    }
+
+    class CallbackState
+    {
+        public IntPtr MsgPtr { get; init; }
+        public RegisteredWaitHandle waitHandle { get; set; }
+    }
 }
 
 public class WaitHandleSafe : WaitHandle
