@@ -51,10 +51,12 @@ class Program
         {
             ReadMessage(portHandle);
         }
+
         CancellationToken cancellationToken = _cts.Token;
         while (cancellationToken.IsCancellationRequested == false)
         {
         }
+
         Console.WriteLine("Cancellation requested");
     }
 
@@ -139,7 +141,7 @@ class Program
         Marshal.FreeHGlobal(replyBuffer);
 
         Console.WriteLine(
-            $"Message {reply.ReplyHeader.MessageId} Reply status = {hr:X}; Rights={rights}; c[0]={result.Notification.Contents[0]}; c[1]={result.Notification.Contents[1]}");
+            $"Message {reply.ReplyHeader.MessageId} Reply status = {hr:X}; Rights={rights}; c[0]={(char)result.Notification.Contents[0]}; c[1]={(char)result.Notification.Contents[1]}");
         if (hr != DriverConstants.Ok)
         {
             _cts.Cancel();
@@ -152,8 +154,8 @@ class Program
         {
             MsgPtr = state
         };
-        RegisteredWaitHandle regWaitHandle = null;
-        callbackState.waitHandle = ThreadPool.RegisterWaitForSingleObject(
+
+        callbackState.WaitHandle = ThreadPool.RegisterWaitForSingleObject(
             new WaitHandleSafe(hEvent),
             /*/*static#1# (state, timedOut) =>
             {
@@ -188,17 +190,20 @@ class Program
         {
             return;
         }
-        if (callbackState.waitHandle == null)
+
+        if (callbackState.WaitHandle == null)
         {
             Console.WriteLine("waitHandle is null");
             _cts.Cancel();
             return;
         }
+
         try
         {
             var message = Marshal.PtrToStructure<MarkReaderMessage>(callbackState.MsgPtr);
             var contentString = Encoding.UTF8.GetString(message.Notification.Contents);
-            Console.WriteLine($"{message.MessageHeader.MessageId}; ThreadId = {Thread.CurrentThread.ManagedThreadId} \n Content: {contentString}");
+            Console.WriteLine(
+                $"Handle MessageId={message.MessageHeader.MessageId}; ThreadId = {Thread.CurrentThread.ManagedThreadId} \n Content: {contentString.Substring(0, (int)message.Notification.Size)}");
 
             // todo call dataflow
             SendReplyToMessage(message);
@@ -206,18 +211,18 @@ class Program
         }
         finally
         {
-            callbackState.waitHandle.Unregister(null);
+            callbackState.WaitHandle.Unregister(null);
         }
     }
 
     class CallbackState
     {
         public IntPtr MsgPtr { get; init; }
-        public RegisteredWaitHandle waitHandle { get; set; }
+        public RegisteredWaitHandle? WaitHandle { get; set; }
     }
 }
 
-public class WaitHandleSafe : WaitHandle
+internal class WaitHandleSafe : WaitHandle
 {
     public WaitHandleSafe(IntPtr handle)
     {
