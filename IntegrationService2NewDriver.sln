@@ -10,6 +10,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClientPrototype.Test", "tes
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleConsolePrototype", "src\SimpleConsolePrototype\SimpleConsolePrototype.csproj", "{8A03AC62-AA5F-493A-9DC9-9A28247B8E65}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleAsyncPrototype", "src\SimpleAsyncPrototype\SimpleAsyncPrototype.csproj", "{788DC6A7-A058-4709-A33F-ADEA7C37E27A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SimpleCallbackPrototype", "src\SimpleCallbackPrototype\SimpleCallbackPrototype.csproj", "{7BB1F28B-1A77-4D35-95BC-0C48214379A3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -19,6 +23,8 @@ Global
 		{FA5929F4-B08E-4BC6-8573-8C7D31474494} = {11993216-4B63-48DD-B0DD-DEFAC2171A6A}
 		{25BDAD6B-971D-4EB7-A922-AE6A79F13E02} = {03A724EF-A345-4840-B649-6B5E0A3B9E91}
 		{8A03AC62-AA5F-493A-9DC9-9A28247B8E65} = {11993216-4B63-48DD-B0DD-DEFAC2171A6A}
+		{788DC6A7-A058-4709-A33F-ADEA7C37E27A} = {11993216-4B63-48DD-B0DD-DEFAC2171A6A}
+		{7BB1F28B-1A77-4D35-95BC-0C48214379A3} = {11993216-4B63-48DD-B0DD-DEFAC2171A6A}
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{FA5929F4-B08E-4BC6-8573-8C7D31474494}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
@@ -33,5 +39,13 @@ Global
 		{8A03AC62-AA5F-493A-9DC9-9A28247B8E65}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8A03AC62-AA5F-493A-9DC9-9A28247B8E65}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8A03AC62-AA5F-493A-9DC9-9A28247B8E65}.Release|Any CPU.Build.0 = Release|Any CPU
+		{788DC6A7-A058-4709-A33F-ADEA7C37E27A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{788DC6A7-A058-4709-A33F-ADEA7C37E27A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{788DC6A7-A058-4709-A33F-ADEA7C37E27A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{788DC6A7-A058-4709-A33F-ADEA7C37E27A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7BB1F28B-1A77-4D35-95BC-0C48214379A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7BB1F28B-1A77-4D35-95BC-0C48214379A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7BB1F28B-1A77-4D35-95BC-0C48214379A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7BB1F28B-1A77-4D35-95BC-0C48214379A3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

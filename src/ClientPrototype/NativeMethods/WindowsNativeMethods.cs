@@ -3,7 +3,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace ClientPrototype.NativeMethods;
 
-internal class WindowsNativeMethods
+public class WindowsNativeMethods
 {
     [DllImport("fltlib.dll", SetLastError = true)]
     public static extern uint FilterConnectCommunicationPort(

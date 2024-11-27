@@ -72,22 +72,22 @@ internal class WinDriverClient : IDriverClient
         int offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
         IntPtr structPtr = IntPtr.Subtract(pOvlp, offset);
         //MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(structPtr);
-        FilterMessageHeader header =
-            (FilterMessageHeader)Marshal.PtrToStructure(structPtr, typeof(FilterMessageHeader));
-        structPtr += Marshal.SizeOf(typeof(FilterMessageHeader));
+        Header header =
+            (Header)Marshal.PtrToStructure(structPtr, typeof(Header));
+        structPtr += Marshal.SizeOf(typeof(Header));
         //--------------------------------------------------------------------------------
     
-        MarkReaderNotification notification =
-            (MarkReaderNotification)Marshal.PtrToStructure(structPtr, typeof(MarkReaderNotification));
+        Notification notification =
+            (Notification)Marshal.PtrToStructure(structPtr, typeof(Notification));
 
-        structPtr = IntPtr.Subtract(structPtr, Marshal.SizeOf(typeof(FilterMessageHeader)));
+        structPtr = IntPtr.Subtract(structPtr, Marshal.SizeOf(typeof(Header)));
 
         // byte[] rawData = new byte[Marshal.SizeOf<MarkReaderMessage>()];
         // Marshal.Copy(structPtr, rawData, 0, rawData.Length);
         // Console.WriteLine(BitConverter.ToString(rawData));
         //
-        // FilterMessageHeader headerM = Marshal.PtrToStructure<FilterMessageHeader>(structPtr);
-        // MarkReaderNotification notificationM = Marshal.PtrToStructure<MarkReaderNotification>(
+        // Header headerM = Marshal.PtrToStructure<Header>(structPtr);
+        // Notification notificationM = Marshal.PtrToStructure<Notification>(
         //     IntPtr.Add(structPtr, Marshal.OffsetOf<MarkReaderMessage>("Notification").ToInt32()));
 
         var notificationRes = new RequestNotification(header.MessageId, notification.Contents);

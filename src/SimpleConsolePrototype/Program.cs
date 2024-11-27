@@ -3,7 +3,6 @@ using System.Text;
 using ClientPrototype.Dto;
 using Microsoft.Win32.SafeHandles;
 using SimpleConsolePrototype;
-using SimpleConsolePrototype.DriverMessage;
 
 
 const string portName = "\\MarkReaderPort"; // "\\DssFsMiniFilterPort"
@@ -105,8 +104,8 @@ void ReadMessage()
     // msgPtr += Marshal.SizeOf(typeof(DriverNotificationHeader));
     // //--------------------------------------------------------------------------------
     //
-    // MarkReaderNotification markReaderNotification =
-    //     (MarkReaderNotification)Marshal.PtrToStructure(msgPtr, typeof(MarkReaderNotification));
+    // Notification markReaderNotification =
+    //     (Notification)Marshal.PtrToStructure(msgPtr, typeof(Notification));
     //
     // IntPtr.Subtract(msgPtr, Marshal.SizeOf(typeof(DriverNotificationHeader)));
 

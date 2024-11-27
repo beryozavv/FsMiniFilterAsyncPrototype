@@ -6,13 +6,13 @@ namespace ClientPrototype.Dto;
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct MarkReaderMessage
 {
-    public FilterMessageHeader MessageHeader;
-    public MarkReaderNotification Notification; // Уведомление от драйвера
+    public Header MessageHeader;
+    public Notification Notification; // Уведомление от драйвера
     public NativeOverlapped Ovlp;               // OVERLAPPED структура
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
-public struct MarkReaderNotification
+public struct Notification
 {
     [MarshalAs(UnmanagedType.U4)]
     public uint Size;
@@ -26,7 +26,7 @@ public struct MarkReaderNotification
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 8)]
-public struct FilterMessageHeader
+public struct Header
 {
     /// <summary>
     /// Максимальная длина ответа на сообщение.
