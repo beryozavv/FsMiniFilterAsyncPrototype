@@ -1,6 +1,7 @@
 ﻿using System.Runtime.InteropServices;
 using System.Text;
 using ClientPrototype.Dto;
+using ClientPrototype.NativeMethods;
 using Microsoft.Win32.SafeHandles;
 using SimpleConsolePrototype;
 
@@ -81,7 +82,7 @@ void ReadMessage()
     Console.ReadLine();
     //IntPtr msgPtr = IntPtr.Zero;
     var msgPtr = Marshal.AllocHGlobal(bufferLength);
-    uint hr = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, bufferLength,
+    uint hr = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, (uint)bufferLength,
         IntPtr.Zero);
     if (hr != DriverConstants.Ok)
     {

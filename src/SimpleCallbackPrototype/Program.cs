@@ -14,7 +14,7 @@ class Program
     static SafeFileHandle portHandle;
 
     static int msgSize = Marshal.SizeOf<MarkReaderMessage>();
-    static int ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
+    static int ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Overlapped").ToInt32();
     private static int replySize = Marshal.SizeOf<MarkReaderReplyMessage>();
 
     private static readonly CancellationTokenSource _cts = new();
@@ -68,7 +68,7 @@ class Program
             throw new Exception("Не удалось создать событие.");
         }
 
-        var ovlp = new NativeOverlapped()
+        var ovlp = new NativeOverlapped
         {
             EventHandle = hEvent
         };

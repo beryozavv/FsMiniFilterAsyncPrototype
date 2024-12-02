@@ -8,7 +8,6 @@ using ClientPrototype.Settings;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.Win32.SafeHandles;
-using ProcessPrivileges;
 
 namespace ClientPrototype.Clients;
 
@@ -32,11 +31,11 @@ internal class WinDriverClient : IDriverClient
     public void ReadNotification()
     {
         // Предварительная инициализация FilterGetMessage
-        int msgSize = Marshal.SizeOf<MarkReaderMessage>(); //Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
+        int msgSize = Marshal.SizeOf<MarkReaderMessage>(); //Marshal.OffsetOf<MarkReaderMessage>("Overlapped").ToInt32();
         var msgPtr = Marshal.AllocHGlobal(msgSize);
 
         var overlapped = new NativeOverlapped();
-        int ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
+        int ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Overlapped").ToInt32();
         IntPtr overlappedPtr = IntPtr.Add(msgPtr, ovlpOffset); //Marshal.AllocHGlobal(Marshal.SizeOf<NativeOverlapped>());
         Marshal.StructureToPtr(overlapped, overlappedPtr, false);
         
@@ -69,7 +68,7 @@ internal class WinDriverClient : IDriverClient
             throw new($"GetQueuedCompletionStatus failed. Error: 0x{errorCode:X}");
         }
 
-        int offset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
+        int offset = Marshal.OffsetOf<MarkReaderMessage>("Overlapped").ToInt32();
         IntPtr structPtr = IntPtr.Subtract(pOvlp, offset);
         //MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(structPtr);
         Header header =
@@ -182,9 +181,7 @@ internal class WinDriverClient : IDriverClient
         }
 
         _logger.LogDebug("Try to enable privileges");
-        // ProcessPrivileges https://archive.codeplex.com/?p=processprivileges
-        using Process process = Process.GetCurrentProcess();
-        using PrivilegeEnabler privilegeEnabler = new PrivilegeEnabler(process, Privilege.LoadDriver);
+        PrivilegeManager.EnableCurrentProcessPrivilege(PrivilegeManager.SeLoadDriverPrivilege);
 
         uint hr = WindowsNativeMethods.FilterLoad(filterName);
         if (hr == DriverConstants.Ok)
@@ -205,9 +202,7 @@ internal class WinDriverClient : IDriverClient
             throw new ArgumentNullException(nameof(filterName));
         }
 
-        // ProcessPrivileges https://archive.codeplex.com/?p=processprivileges
-        using Process process = Process.GetCurrentProcess();
-        using PrivilegeEnabler privilegeEnabler = new PrivilegeEnabler(process, Privilege.LoadDriver);
+        PrivilegeManager.EnableCurrentProcessPrivilege(PrivilegeManager.SeLoadDriverPrivilege);
 
         uint hr = WindowsNativeMethods.FilterUnload(filterName);
         if (hr is DriverConstants.Ok or DriverConstants.ErrorFltFilterNotFound)

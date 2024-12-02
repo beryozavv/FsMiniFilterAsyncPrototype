@@ -8,7 +8,7 @@ public struct MarkReaderMessage
 {
     public Header MessageHeader;
     public Notification Notification; // Уведомление от драйвера
-    public NativeOverlapped Ovlp;               // OVERLAPPED структура
+    public NativeOverlapped Overlapped;               // OVERLAPPED структура
 }
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]

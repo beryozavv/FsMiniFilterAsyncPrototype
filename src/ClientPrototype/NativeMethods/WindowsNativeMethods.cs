@@ -14,6 +14,28 @@ public class WindowsNativeMethods
         /* [in]  */ IntPtr securityAttributes,
         /* [out] */ out SafeFileHandle portHandle);
 
+    [DllImport("fltlib.dll", SetLastError = true)]
+    public static extern uint FilterGetMessage(
+        SafeFileHandle hPort,
+        IntPtr lpMessageBuffer,
+        uint dwMessageBufferSize,
+        IntPtr lpOverlapped);
+
+    [DllImport("fltlib.dll", SetLastError = true)]
+    public static extern uint FilterReplyMessage(
+        SafeFileHandle port,
+        IntPtr replyBuffer,
+        uint replyBufferSize
+    );
+
+    [DllImport("fltlib.dll")]
+    public static extern uint FilterLoad(
+        /* [in] */ [MarshalAs(UnmanagedType.LPWStr)] string filterName);
+
+    [DllImport("fltlib.dll")]
+    public static extern uint FilterUnload(
+        /* [in] */ [MarshalAs(UnmanagedType.LPWStr)] string filterName);
+    
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern IntPtr CreateIoCompletionPort(
         SafeFileHandle fileHandle,
@@ -21,13 +43,6 @@ public class WindowsNativeMethods
         UIntPtr completionKey,
         uint numberOfConcurrentThreads
     );
-
-    [DllImport("fltlib.dll", SetLastError = true)]
-    public static extern uint FilterGetMessage(
-        SafeFileHandle hPort,
-        IntPtr lpMessageBuffer,
-        uint dwMessageBufferSize,
-        IntPtr lpOverlapped);
 
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool GetQueuedCompletionStatus(
@@ -37,22 +52,11 @@ public class WindowsNativeMethods
         out IntPtr lpOverlapped,
         uint dwMilliseconds
     );
-
-    [DllImport("fltlib.dll", SetLastError = true)]
-    public static extern uint FilterReplyMessage(
-        SafeFileHandle port,
-        IntPtr replyBuffer,
-        uint replyBufferSize
-    );
-
+    
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr CreateEvent(IntPtr lpEventAttributes, bool bManualReset, bool bInitialState,
+        string? lpName);
+    
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool CloseHandle(IntPtr handle);
-
-    [DllImport("fltlib.dll")]
-    public static extern uint FilterLoad(
-        /* [in] */ [MarshalAs(UnmanagedType.LPWStr)] string filterName);
-
-    [DllImport("fltlib.dll")]
-    public static extern uint FilterUnload(
-        /* [in] */ [MarshalAs(UnmanagedType.LPWStr)] string filterName);
 }

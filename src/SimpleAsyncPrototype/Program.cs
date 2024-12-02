@@ -1,38 +1,32 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Text;
 using ClientPrototype.Constants;
 using ClientPrototype.Dto;
 using ClientPrototype.NativeMethods;
+using ClientPrototype.NativeWrappers;
 using Microsoft.Win32.SafeHandles;
 
-class Program
+namespace SimpleAsyncPrototype;
+
+internal class Program
 {
-    private const int ERROR_IO_PENDING = 997;
-    private const uint INFINITE = 0xFFFFFFFF;
+    const string ErrorPortName = "\\MarkReaderPort";
+    private static SafeFileHandle _portHandle = null!;
 
-    const string portName = "\\MarkReaderPort"; // "\\DssFsMiniFilterPort"
-    static SafeFileHandle portHandle;
+    private static readonly int MsgSize = Marshal.SizeOf<MarkReaderMessage>();
 
-    static int msgSize = Marshal.SizeOf<MarkReaderMessage>();
-    static int ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Ovlp").ToInt32();
-    private static int replySize = Marshal.SizeOf<MarkReaderReplyMessage>();
+    private static readonly int OverlappedOffset =
+        Marshal.OffsetOf<MarkReaderMessage>(nameof(MarkReaderMessage.Overlapped)).ToInt32();
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr CreateEvent(IntPtr lpEventAttributes, bool bManualReset, bool bInitialState,
-        string lpName);
+    private static readonly int ReplySize = Marshal.SizeOf<MarkReaderReplyMessage>();
 
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool SetEvent(IntPtr hEvent);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
-
-    static async Task Main(string[] args)
+    static async Task Main()
     {
         // Подключение к порту фильтра
-        uint result =
-            WindowsNativeMethods.FilterConnectCommunicationPort(portName, 0, IntPtr.Zero, 0, IntPtr.Zero,
-                out portHandle);
+        var result =
+            WindowsNativeMethods.FilterConnectCommunicationPort(ErrorPortName, 0, IntPtr.Zero, 0, IntPtr.Zero,
+                out _portHandle);
         if (result != 0)
         {
             Console.WriteLine($"Не удалось подключиться к порту. Код ошибки: 0x{result:X}");
@@ -40,74 +34,72 @@ class Program
         }
 
         // Начинаем асинхронное чтение сообщений
-        await ReadMessagesAsync(portHandle);
+        await ReadMessagesAsync();
     }
 
-    private static async Task ReadMessagesAsync(SafeFileHandle portHandle)
+    [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
+    private static async Task ReadMessagesAsync()
     {
         while (true)
         {
-            IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
-            if (hEvent == IntPtr.Zero)
+            var safeEventHandle = new SafeEventHandle();
+            safeEventHandle.SetHandle(WindowsNativeMethods.CreateEvent(IntPtr.Zero, true, false, null));
+            using (safeEventHandle)
             {
-                throw new Exception("Не удалось создать событие.");
-            }
-            var ovlp = new NativeOverlapped()
-            {
-                EventHandle = hEvent
-            };
-            
-            var msgPtr = Marshal.AllocHGlobal(msgSize);
-            IntPtr ovlpPtr = IntPtr.Add(msgPtr, ovlpOffset);
-            Marshal.StructureToPtr(ovlp, ovlpPtr, false);
+                if (safeEventHandle.IsInvalid)
+                {
+                    throw new Exception("Не удалось создать событие.");
+                }
 
-            uint ioResult = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, (uint)msgSize, ovlpPtr);
+                var overlapped = new NativeOverlapped
+                {
+                    EventHandle = safeEventHandle.DangerousGetHandle()
+                };
+                var safeMessageHandle = new SafeHGlobalHandle();
+                safeMessageHandle.SetHandle(Marshal.AllocHGlobal(MsgSize));
+                using (safeMessageHandle)
+                {
+                    var messagePtr = safeMessageHandle.DangerousGetHandle();
+                    var overlappedPtr = IntPtr.Add(messagePtr, OverlappedOffset);
+                    Marshal.StructureToPtr(overlapped, overlappedPtr, false);
+                    var ioResult =
+                        WindowsNativeMethods.FilterGetMessage(_portHandle, messagePtr,
+                            (uint)MsgSize, overlappedPtr);
 
-            // if (ioResult == ERROR_IO_PENDING)
-            // {
-            //     Console.WriteLine("Ожидание сообщения...");
-            //     var result = await WaitForEventAsync(ovlp.EventHandle, msgPtr);
-            //     SendReplyToMessage(result);
-            // }
-            // else
-            // {
-            //     throw new Exception($"Ошибка получения сообщения.{ioResult.ToString("X")}");
-            // }
+                    if (ioResult != DriverConstants.ErrorIoPending)
+                    {
+                        var lastError = Marshal.GetLastWin32Error();
+                        throw new Exception($"FilterGetMessage failed. Error code: 0x{lastError:X}");
+                    }
 
-            // Рабочий код:
-            // var msgPtr = Marshal.AllocHGlobal(msgSize);
-            //
-            // IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
-            //
-            // if (hEvent == IntPtr.Zero)
-            // {
-            //     throw new Exception("Не удалось создать событие.");
-            // }
-            //
-            // var overlapped = new NativeOverlapped
-            // {
-            //     EventHandle = hEvent
-            // };
-            //
-            // IntPtr overlappedPtr = IntPtr.Add(msgPtr, ovlpOffset);
-            // Marshal.StructureToPtr(overlapped, overlappedPtr, false);
-
-            //var result = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, (uint)msgSize, overlappedPtr);
-
-            if (ioResult != DriverConstants.ErrorIoPending)
-            {
-                var lastError = Marshal.GetLastWin32Error();
-                Marshal.FreeHGlobal(msgPtr);
-                throw new($"FilterGetMessage failed. Error code: 0x{lastError:X}");
-            }
-            else
-            {
-                var message = await WaitForEventAsync(ovlp.EventHandle, msgPtr);
-                var contentString = Encoding.UTF8.GetString(message.Notification.Contents);
-                Console.WriteLine($"{message.MessageHeader.MessageId}; Content: {contentString}");
-                SendReplyToMessage(message);
+                    var message = await WaitForEventAsync(overlapped.EventHandle, messagePtr);
+                    var contentString = Encoding.UTF8.GetString(message.Notification.Contents);
+                    Console.WriteLine($"{message.MessageHeader.MessageId}; Content: {contentString.Substring(0, (int)message.Notification.Size)}");
+                    SendReplyToMessage(message);
+                }
             }
         }
+    }
+
+    private static async Task<MarkReaderMessage> WaitForEventAsync(IntPtr hEvent, IntPtr state)
+    {
+        var tcs = new TaskCompletionSource<MarkReaderMessage>();
+
+        var regWaitHandle = ThreadPool.RegisterWaitForSingleObject(
+            new WaitHandleSafe(hEvent),
+            (cbState, _) =>
+            {
+                var message = Marshal.PtrToStructure<MarkReaderMessage>((IntPtr)cbState!);
+                tcs.SetResult(message);
+            },
+            state,
+            -1,
+            true
+        );
+
+        var result = await tcs.Task;
+        regWaitHandle.Unregister(null);
+        return result;
     }
 
     private static void SendReplyToMessage(MarkReaderMessage result)
@@ -120,44 +112,19 @@ class Program
             Reply = new MarkReaderReply { Rights = (byte)rights }
         };
 
-        var replyBuffer = Marshal.AllocHGlobal(replySize);
-        Marshal.StructureToPtr(reply, replyBuffer, true);
-        var hr = WindowsNativeMethods.FilterReplyMessage(
-            portHandle,
-            replyBuffer,
-            (uint)replySize);
-        Marshal.FreeHGlobal(replyBuffer);
+        var safeReplyHandle = new SafeHGlobalHandle();
+        safeReplyHandle.SetHandle(Marshal.AllocHGlobal(ReplySize));
+        using (safeReplyHandle)
+        {
+            var replyPtr = safeReplyHandle.DangerousGetHandle();
+            Marshal.StructureToPtr(reply, replyPtr, true);
+            var hr = WindowsNativeMethods.FilterReplyMessage(
+                _portHandle,
+                replyPtr,
+                (uint)ReplySize);
 
-        Console.WriteLine(
-            $"Message {reply.ReplyHeader.MessageId} Reply status = {hr.ToString("X")}; Rights={rights}; c[0]={result.Notification.Contents[0]}; c[1]={result.Notification.Contents[1]}");
-    }
-
-    private static async Task<MarkReaderMessage> WaitForEventAsync(IntPtr hEvent, IntPtr state)
-    {
-        var tcs = new TaskCompletionSource<MarkReaderMessage>();
-
-        RegisteredWaitHandle regWaitHandle = ThreadPool.RegisterWaitForSingleObject(
-            new WaitHandleSafe(hEvent),
-            (state, timedOut) =>
-            {
-                var message = Marshal.PtrToStructure<MarkReaderMessage>((IntPtr)state);
-                tcs.SetResult(message);
-            },
-            state,
-            -1,
-            true
-        );
-
-        var result = await tcs.Task;
-        regWaitHandle.Unregister(null);
-        return result;
-    }
-}
-
-public class WaitHandleSafe : WaitHandle
-{
-    public WaitHandleSafe(IntPtr handle)
-    {
-        SafeWaitHandle = new Microsoft.Win32.SafeHandles.SafeWaitHandle(handle, false);
+            Console.WriteLine(
+                $"Message {reply.ReplyHeader.MessageId} Reply status = {hr.ToString("X")}; Rights={rights}; c[0]={(char)result.Notification.Contents[0]}; c[1]={(char)result.Notification.Contents[1]}");
+        }
     }
 }
