@@ -1,58 +1,49 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
 using System.Text;
 using ClientPrototype.Constants;
 using ClientPrototype.Dto;
 using ClientPrototype.NativeMethods;
 using Microsoft.Win32.SafeHandles;
 
+namespace SimpleCallbackPrototype;
+
 class Program
 {
-    private const int ERROR_IO_PENDING = 997;
-    private const uint INFINITE = 0xFFFFFFFF;
+    const string ErrorPortName = "\\MarkReaderPort"; // "\\DssFsMiniFilterPort"
+    static SafeFileHandle _portHandle=null!;
 
-    const string portName = "\\MarkReaderPort"; // "\\DssFsMiniFilterPort"
-    static SafeFileHandle portHandle;
+    static int _msgSize = Marshal.SizeOf<MarkReaderMessage>();
+    static int _ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Overlapped").ToInt32();
+    private static int _replySize = Marshal.SizeOf<MarkReaderReplyMessage>();
 
-    static int msgSize = Marshal.SizeOf<MarkReaderMessage>();
-    static int ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Overlapped").ToInt32();
-    private static int replySize = Marshal.SizeOf<MarkReaderReplyMessage>();
-
-    private static readonly CancellationTokenSource _cts = new();
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern IntPtr CreateEvent(IntPtr lpEventAttributes, bool bManualReset, bool bInitialState,
-        string lpName);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool SetEvent(IntPtr hEvent);
-
-    [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
-
-    static async Task Main(string[] args)
+    private static readonly CancellationTokenSource Cts = new();
+    
+    static Task Main()
     {
         // Подключение к порту фильтра
         uint result =
-            WindowsNativeMethods.FilterConnectCommunicationPort(portName, 0, IntPtr.Zero, 0, IntPtr.Zero,
-                out portHandle);
+            WindowsNativeMethods.FilterConnectCommunicationPort(ErrorPortName, 0, IntPtr.Zero, 0, IntPtr.Zero,
+                out _portHandle);
         if (result != 0)
         {
             Console.WriteLine($"Не удалось подключиться к порту. Код ошибки: 0x{result:X}");
-            return;
+            return Task.CompletedTask;
         }
 
         // Начинаем асинхронное чтение сообщений
-        ReadMessages(portHandle);
+        ReadMessages();
+        return Task.CompletedTask;
     }
 
-    private static void ReadMessages(SafeFileHandle portHandle)
+    private static void ReadMessages()
     {
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 10; i++)
         {
-            ReadMessage(portHandle);
+            ReadMessage();
         }
 
-        CancellationToken cancellationToken = _cts.Token;
+        CancellationToken cancellationToken = Cts.Token;
         while (cancellationToken.IsCancellationRequested == false)
         {
         }
@@ -60,9 +51,10 @@ class Program
         Console.WriteLine("Cancellation requested");
     }
 
-    private static void ReadMessage(SafeFileHandle handle)
+    [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
+    private static void ReadMessage()
     {
-        IntPtr hEvent = CreateEvent(IntPtr.Zero, true, false, null);
+        IntPtr hEvent = WindowsNativeMethods.CreateEvent(IntPtr.Zero, true, false, null);
         if (hEvent == IntPtr.Zero)
         {
             throw new Exception("Не удалось создать событие.");
@@ -73,11 +65,11 @@ class Program
             EventHandle = hEvent
         };
 
-        var msgPtr = Marshal.AllocHGlobal(msgSize);
-        IntPtr ovlpPtr = IntPtr.Add(msgPtr, ovlpOffset);
+        var msgPtr = Marshal.AllocHGlobal(_msgSize);
+        IntPtr ovlpPtr = IntPtr.Add(msgPtr, _ovlpOffset);
         Marshal.StructureToPtr(ovlp, ovlpPtr, false);
 
-        uint ioResult = WindowsNativeMethods.FilterGetMessage(portHandle, msgPtr, (uint)msgSize, ovlpPtr);
+        uint ioResult = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)_msgSize, ovlpPtr);
 
         // Рабочий код:
         /*var msgPtr = Marshal.AllocHGlobal(msgSize);
@@ -103,7 +95,7 @@ class Program
         {
             var lastError = Marshal.GetLastWin32Error();
             Marshal.FreeHGlobal(msgPtr);
-            _cts.Cancel();
+            Cts.Cancel();
             throw new($"FilterGetMessage failed. Error code: 0x{lastError:X}");
         }
         else
@@ -123,7 +115,7 @@ class Program
         {
             ReplyHeader = new FilterReplyHeader
             {
-                MessageId = result.MessageHeader.MessageId,
+                MessageId = result.Header.MessageId,
                 Status = 0
             },
             Reply = new MarkReaderReply
@@ -132,19 +124,19 @@ class Program
             }
         };
 
-        var replyBuffer = Marshal.AllocHGlobal(replySize);
+        var replyBuffer = Marshal.AllocHGlobal(_replySize);
         Marshal.StructureToPtr(reply, replyBuffer, true);
         var hr = WindowsNativeMethods.FilterReplyMessage(
-            portHandle,
+            _portHandle,
             replyBuffer,
-            (uint)replySize);
+            (uint)_replySize);
         Marshal.FreeHGlobal(replyBuffer);
 
         Console.WriteLine(
             $"Message {reply.ReplyHeader.MessageId} Reply status = {hr:X}; Rights={rights}; c[0]={(char)result.Notification.Contents[0]}; c[1]={(char)result.Notification.Contents[1]}");
         if (hr != DriverConstants.Ok)
         {
-            _cts.Cancel();
+            Cts.Cancel();
         }
     }
 
@@ -164,7 +156,7 @@ class Program
                 {
                     var message = Marshal.PtrToStructure<MarkReaderMessage>(callbackState.MsgPtr);
                     var contentString = Encoding.UTF8.GetString(message.Notification.Contents);
-                    Console.WriteLine($"{message.MessageHeader.MessageId}; ThreadId = {Thread.CurrentThread.ManagedThreadId} \n Content: {contentString}");
+                    Console.WriteLine($"{message.Header.MessageId}; ThreadId = {Thread.CurrentThread.ManagedThreadId} \n Content: {contentString}");
 
                     // todo call dataflow
                     SendReplyToMessage(message);
@@ -194,7 +186,7 @@ class Program
         if (callbackState.WaitHandle == null)
         {
             Console.WriteLine("waitHandle is null");
-            _cts.Cancel();
+            Cts.Cancel();
             return;
         }
 
@@ -203,11 +195,11 @@ class Program
             var message = Marshal.PtrToStructure<MarkReaderMessage>(callbackState.MsgPtr);
             var contentString = Encoding.UTF8.GetString(message.Notification.Contents);
             Console.WriteLine(
-                $"Handle MessageId={message.MessageHeader.MessageId}; ThreadId = {Thread.CurrentThread.ManagedThreadId} \n Content: {contentString.Substring(0, (int)message.Notification.Size)}");
+                $"Handle MessageId={message.Header.MessageId}; ThreadId = {Thread.CurrentThread.ManagedThreadId} \n Content: {contentString.Substring(0, 50)}");
 
             // todo call dataflow
             SendReplyToMessage(message);
-            ReadMessage(portHandle);
+            ReadMessage();
         }
         finally
         {
@@ -226,6 +218,6 @@ internal class WaitHandleSafe : WaitHandle
 {
     public WaitHandleSafe(IntPtr handle)
     {
-        SafeWaitHandle = new Microsoft.Win32.SafeHandles.SafeWaitHandle(handle, false);
+        SafeWaitHandle = new SafeWaitHandle(handle, false);
     }
 }

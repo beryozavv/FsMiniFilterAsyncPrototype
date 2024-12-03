@@ -4,6 +4,7 @@ namespace ClientPrototype.Abstractions;
 
 public interface INotificationFlow
 {
-    Task PostAsync(RequestNotification request, CancellationToken token);
-    void Complete();
+    public void InitFlow(CancellationToken cancellationToken);
+    Task PostAsync(DataFlowCommand command, CancellationToken token);
+    Task CompleteFlow();
 }

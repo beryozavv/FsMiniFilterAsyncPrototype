@@ -8,10 +8,12 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NLog.Extensions.Logging;
 
-await Task.Delay(TimeSpan.FromSeconds(10));
 var builder = Host.CreateApplicationBuilder(args);
 
 var env = builder.Environment.EnvironmentName;
+
+Console.WriteLine($"Current environment: {env}");
+
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
     .AddJsonFile($"appsettings.{env}.json", optional: true)
@@ -26,9 +28,6 @@ builder.Services.AddLogging(logging =>
     logging.SetMinimumLevel(LogLevel.Trace);
     logging.AddNLog($"nlog.{env}.config");
 });
-
-// Add NLog as the logger provider
-builder.Services.AddSingleton<ILoggerProvider, NLogLoggerProvider>();
 
 var cancellationTokenSource = new CancellationTokenSource();
 

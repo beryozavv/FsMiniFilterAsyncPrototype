@@ -1,9 +1,12 @@
-﻿using System.Diagnostics;
+﻿using System.Diagnostics.CodeAnalysis;
 using System.Runtime.InteropServices;
 using ClientPrototype.Abstractions;
 using ClientPrototype.Constants;
 using ClientPrototype.Dto;
+using ClientPrototype.Exceptions;
+using ClientPrototype.Helpers;
 using ClientPrototype.NativeMethods;
+using ClientPrototype.NativeWrappers;
 using ClientPrototype.Settings;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -16,126 +19,122 @@ internal class WinDriverClient : IDriverClient
     private readonly DriverSettings _driverSettings;
 
     private readonly ILogger<WinDriverClient> _logger;
-    private SafeFileHandle _portHandle;
-    private IntPtr _completionPort;
+    private SafeFileHandle _portHandle = null!;
+
+    private static readonly int MsgSize = Marshal.SizeOf<MarkReaderMessage>();
+
+    private static readonly int OverlappedOffset =
+        Marshal.OffsetOf<MarkReaderMessage>(nameof(MarkReaderMessage.Overlapped)).ToInt32();
+
+    private static readonly int ReplySize = Marshal.SizeOf<MarkReaderReplyMessage>();
 
     public WinDriverClient(IOptions<DriverSettings> driverSettings, ILogger<WinDriverClient> logger)
     {
         _logger = logger;
         _driverSettings = driverSettings.Value;
+    }
+
+    public void Connect()
+    {
         UnloadFilter();
         LoadFilter();
         OpenConnection(_driverSettings.ConnectionName);
     }
 
-    public void ReadNotification()
+    [SuppressMessage("Interoperability", "CA1416:Validate platform compatibility")]
+    public async Task<RequestNotification> ReadNotificationAsync(Guid commandId, CancellationToken cancellationToken)
     {
-        // Предварительная инициализация FilterGetMessage
-        int msgSize = Marshal.SizeOf<MarkReaderMessage>(); //Marshal.OffsetOf<MarkReaderMessage>("Overlapped").ToInt32();
-        var msgPtr = Marshal.AllocHGlobal(msgSize);
-
-        var overlapped = new NativeOverlapped();
-        int ovlpOffset = Marshal.OffsetOf<MarkReaderMessage>("Overlapped").ToInt32();
-        IntPtr overlappedPtr = IntPtr.Add(msgPtr, ovlpOffset); //Marshal.AllocHGlobal(Marshal.SizeOf<NativeOverlapped>());
-        Marshal.StructureToPtr(overlapped, overlappedPtr, false);
-        
-        var result = WindowsNativeMethods.FilterGetMessage(_portHandle, msgPtr, (uint)msgSize, overlappedPtr);
-        
-        if (result != DriverConstants.ErrorIoPending)
+        try
         {
-            var lastError = Marshal.GetLastWin32Error();
-            Marshal.FreeHGlobal(msgPtr);
-            throw new($"FilterGetMessage failed. Error code: 0x{lastError:X}");
-        }
-
-        // MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(msgPtr);
-        // var notification = new RequestNotification(message.MessageHeader.MessageId, message.Notification.Contents);
-        //return notification;
-    }
-
-    public RequestNotification ReadAsyncNotification()
-    {
-        IntPtr pOvlp;
-
-        if (!WindowsNativeMethods.GetQueuedCompletionStatus(_completionPort,
-            out var bytesTransferred,
-            out var completionKey,
-            out pOvlp,
-            uint.MaxValue))
-        {
-
-            int errorCode = Marshal.GetLastWin32Error();
-            throw new($"GetQueuedCompletionStatus failed. Error: 0x{errorCode:X}");
-        }
-
-        int offset = Marshal.OffsetOf<MarkReaderMessage>("Overlapped").ToInt32();
-        IntPtr structPtr = IntPtr.Subtract(pOvlp, offset);
-        //MarkReaderMessage message = Marshal.PtrToStructure<MarkReaderMessage>(structPtr);
-        Header header =
-            (Header)Marshal.PtrToStructure(structPtr, typeof(Header));
-        structPtr += Marshal.SizeOf(typeof(Header));
-        //--------------------------------------------------------------------------------
-    
-        Notification notification =
-            (Notification)Marshal.PtrToStructure(structPtr, typeof(Notification));
-
-        structPtr = IntPtr.Subtract(structPtr, Marshal.SizeOf(typeof(Header)));
-
-        // byte[] rawData = new byte[Marshal.SizeOf<MarkReaderMessage>()];
-        // Marshal.Copy(structPtr, rawData, 0, rawData.Length);
-        // Console.WriteLine(BitConverter.ToString(rawData));
-        //
-        // Header headerM = Marshal.PtrToStructure<Header>(structPtr);
-        // Notification notificationM = Marshal.PtrToStructure<Notification>(
-        //     IntPtr.Add(structPtr, Marshal.OffsetOf<MarkReaderMessage>("Notification").ToInt32()));
-
-        var notificationRes = new RequestNotification(header.MessageId, notification.Contents);
-        return notificationRes;
-    }
-
-    public uint Reply(ReplyNotification reply)
-    {
-        var replyMessage = new MarkReaderReplyMessage
-        {
-            ReplyHeader = new()
+            var safeEventHandle = new SafeEventHandle();
+            safeEventHandle.SetHandle(WindowsNativeMethods.CreateEvent(IntPtr.Zero, true, false, null));
+            using (safeEventHandle)
             {
-                MessageId = reply.MessageId,
-                Status = reply.Status
-            },
-            Reply = new(reply.Rights)
-        };
+                if (safeEventHandle.IsInvalid)
+                {
+                    throw new DriverClientException("Не удалось создать событие.");
+                }
 
-        var replySize = Marshal.SizeOf(replyMessage);
-        IntPtr replyBuffer = Marshal.AllocHGlobal(replySize);
-        Marshal.StructureToPtr(replyMessage, replyBuffer, true);
-        var hr = WindowsNativeMethods.FilterReplyMessage(
-            _portHandle,
-            replyBuffer,
-            (uint)replySize);
-        Marshal.FreeHGlobal(replyBuffer);
+                var overlapped = new NativeOverlapped
+                {
+                    EventHandle = safeEventHandle.DangerousGetHandle()
+                };
+                var safeMessageHandle = new SafeHGlobalHandle();
+                safeMessageHandle.SetHandle(Marshal.AllocHGlobal(MsgSize));
+                using (safeMessageHandle)
+                {
+                    var messagePtr = safeMessageHandle.DangerousGetHandle();
+                    var overlappedPtr = IntPtr.Add(messagePtr, OverlappedOffset);
+                    Marshal.StructureToPtr(overlapped, overlappedPtr, false);
+                    var ioResult =
+                        WindowsNativeMethods.FilterGetMessage(_portHandle, messagePtr,
+                            (uint)MsgSize, overlappedPtr);
 
-        Console.WriteLine(hr.ToString("X"));
-        if (hr != 0)
-        {
-            throw new($"ERROR: Failed to send reply. HRESULT: 0x{hr:X}");
+                    if (ioResult != DriverConstants.ErrorIoPending)
+                    {
+                        var lastError = Marshal.GetLastWin32Error();
+                        throw new DriverClientException($"FilterGetMessage failed. Error code: 0x{lastError:X}");
+                    }
+
+                    var message = await overlapped.EventHandle.WaitForMessageAsync<MarkReaderMessage>(messagePtr);
+
+                    var notificationRes =
+                        new RequestNotification(commandId, message.Header.MessageId, message.Notification.Contents,
+                            (int)message.Notification.Size);
+                    return notificationRes;
+                }
+            }
         }
+        catch (Exception e)
+        {
+            throw new DriverClientException("ReadNotification Error", e);
+        }
+    }
 
-        return hr;
+    public uint Reply(ReplyNotification replyDto)
+    {
+        try
+        {
+            var reply = new MarkReaderReplyMessage
+            {
+                ReplyHeader = new FilterReplyHeader { MessageId = replyDto.MessageId, Status = replyDto.Status },
+                Reply = new MarkReaderReply { Rights = replyDto.Rights }
+            };
+
+            var safeReplyHandle = new SafeHGlobalHandle();
+            safeReplyHandle.SetHandle(Marshal.AllocHGlobal(ReplySize));
+            using (safeReplyHandle)
+            {
+                var replyPtr = safeReplyHandle.DangerousGetHandle();
+                Marshal.StructureToPtr(reply, replyPtr, true);
+                var replyResult = WindowsNativeMethods.FilterReplyMessage(
+                    _portHandle,
+                    replyPtr,
+                    (uint)ReplySize);
+
+                if (replyResult != DriverConstants.Ok)
+                {
+                    throw new DriverClientException($"Reply failed. Error code: 0x{replyResult:X}");
+                }
+
+                return replyResult;
+            }
+        }
+        catch (Exception e)
+        {
+            throw new DriverClientException("Reply Error", e);
+        }
     }
 
     public void Disconnect(CancellationToken token)
     {
         // Close port handle, it will cause return from FilterGetMessage
-        bool portIsValid = _portHandle is { IsClosed: false, IsInvalid: false };
+        var portIsValid = _portHandle is { IsClosed: false, IsInvalid: false };
         if (portIsValid)
         {
             _portHandle.Dispose();
         }
 
-        if (_completionPort != IntPtr.Zero)
-        {
-            WindowsNativeMethods.CloseHandle(_completionPort);
-        }
         UnloadFilter();
     }
 
@@ -143,7 +142,7 @@ internal class WinDriverClient : IDriverClient
     private void OpenConnection(string connectionName)
     {
         _logger.LogDebug("Try to open communication port");
-        uint hr = WindowsNativeMethods.FilterConnectCommunicationPort(
+        var hr = WindowsNativeMethods.FilterConnectCommunicationPort(
             connectionName,
             0,
             IntPtr.Zero,
@@ -154,63 +153,51 @@ internal class WinDriverClient : IDriverClient
 
         if (hr != DriverConstants.Ok)
         {
-            throw new($"Error connect to driver. ErrorCode: 0x{hr:X8}");
-        }
-
-        _completionPort = WindowsNativeMethods.CreateIoCompletionPort(
-            _portHandle,
-            IntPtr.Zero,
-            UIntPtr.Zero,
-            24
-        );
-
-        if (_completionPort == IntPtr.Zero)
-        {
-            throw new("ERROR: Failed to create completion port.");
+            throw new DriverClientException($"Error connect to driver. ErrorCode: 0x{hr:X8}");
         }
     }
 
     private void LoadFilter()
     {
-        string filterName = _driverSettings.DriverName;
+        var filterName = _driverSettings.DriverName;
 
-        _logger.LogDebug("Try to load driver {name}", filterName);
+        _logger.LogDebug("Try to load driver {Name}", filterName);
         if (string.IsNullOrEmpty(filterName))
         {
-            throw new ArgumentNullException(nameof(filterName));
+            throw new DriverClientException($"Invalid setting {nameof(filterName)}");
         }
 
         _logger.LogDebug("Try to enable privileges");
         PrivilegeManager.EnableCurrentProcessPrivilege(PrivilegeManager.SeLoadDriverPrivilege);
 
-        uint hr = WindowsNativeMethods.FilterLoad(filterName);
+        var hr = WindowsNativeMethods.FilterLoad(filterName);
         if (hr == DriverConstants.Ok)
         {
             return;
         }
 
-        string msg = $"Unable to load filter driver. FilterName: {filterName}, ErrorCode: {hr:X8}";
+        var msg = $"Unable to load filter driver. FilterName: {filterName}, ErrorCode: {hr:X8}";
         throw new(msg);
     }
 
     private void UnloadFilter()
     {
-        string filterName = _driverSettings.DriverName;
+        var filterName = _driverSettings.DriverName;
 
         if (string.IsNullOrEmpty(filterName))
         {
-            throw new ArgumentNullException(nameof(filterName));
+            throw new DriverClientException($"Invalid setting {nameof(filterName)}");
         }
 
         PrivilegeManager.EnableCurrentProcessPrivilege(PrivilegeManager.SeLoadDriverPrivilege);
 
-        uint hr = WindowsNativeMethods.FilterUnload(filterName);
+        var hr = WindowsNativeMethods.FilterUnload(filterName);
         if (hr is DriverConstants.Ok or DriverConstants.ErrorFltFilterNotFound)
         {
             return;
         }
 
-        string msg = $"Unable to unload filter driver. FilterName: {filterName}, ErrorCode: {hr:X8}";
+        var msg = $"Unable to unload filter driver. FilterName: {filterName}, ErrorCode: {hr:X8}";
         throw new(msg);
     }
 }

@@ -2,6 +2,7 @@
 
 internal class DriverSettings
 {
-    public required string ConnectionName { get; set; }
-    public required string DriverName { get; set; }
+    public required string ConnectionName { get; init; }
+    public required string DriverName { get; init; }
+    public int MaxDegreeOfParallelism { get; init; }
 }

@@ -6,7 +6,7 @@ namespace ClientPrototype.Dto;
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 public struct MarkReaderMessage
 {
-    public Header MessageHeader;
+    public Header Header;
     public Notification Notification; // Уведомление от драйвера
     public NativeOverlapped Overlapped;               // OVERLAPPED структура
 }

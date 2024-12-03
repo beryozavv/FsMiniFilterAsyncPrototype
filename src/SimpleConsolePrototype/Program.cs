@@ -39,7 +39,7 @@ if (completionPort == IntPtr.Zero)
 try
 {
     // Обработка сообщений
-    ProcessMessagesAsync(portHandle, completionPort);
+    ProcessMessagesAsync();
 }
 catch (Exception e)
 {
@@ -54,20 +54,13 @@ finally
     }
 }
 
-void ProcessMessagesAsync(SafeFileHandle portHandle, IntPtr completionPort)
+void ProcessMessagesAsync()
 {
     while (true)
     {
         try
         {
             ReadMessage();
-            // process message
-            //
-            // var reply = new MarkReaderReplyMessage()
-            // {
-            //     
-            // };
-            // SendReply(portHandle, reply);
         }
         catch (Exception e)
         {
@@ -97,9 +90,9 @@ void ReadMessage()
         throw new Exception($"Error FilterGetMessage. Code: 0x{hr:X8}");
     }
 
-    var message = (MarkReaderMessage)Marshal.PtrToStructure(msgPtr, typeof(MarkReaderMessage));
+    var message = (MarkReaderMessage)Marshal.PtrToStructure(msgPtr, typeof(MarkReaderMessage))!;
     var markReaderNotification = message.Notification;
-    var notificationHeader = message.MessageHeader;
+    var notificationHeader = message.Header;
     // DriverNotificationHeader notificationHeader =
     //     (DriverNotificationHeader)Marshal.PtrToStructure(msgPtr, typeof(DriverNotificationHeader));
     // msgPtr += Marshal.SizeOf(typeof(DriverNotificationHeader));
@@ -117,7 +110,7 @@ void ReadMessage()
     Console.WriteLine(
         $"MessageId={notificationHeader.MessageId} Encoded content. Size = {markReaderNotification.Size}, \n Codes ={codeArr}; \n BitContent = {bitContent} \n Content = {content}");
 
-    SendReply(portHandle, new MarkReaderReplyMessage
+    SendReply(new MarkReaderReplyMessage
     {
         ReplyHeader = new FilterReplyHeader { MessageId = notificationHeader.MessageId, Status = 0 },
         Reply = new MarkReaderReply { Rights = 1 }
@@ -149,7 +142,7 @@ void ReadMessage()
     // string filePart = Marshal.PtrToStringUni(msgPtr, notificationData.FilePartLength / sizeOfUnicodeInBytes);
 }
 
-void SendReply(SafeFileHandle portHandle, MarkReaderReplyMessage replyMessage)
+void SendReply(MarkReaderReplyMessage replyMessage)
 {
     var messageSize = Marshal.SizeOf(replyMessage);
     // var replyHeaderSize = Marshal.SizeOf<FilterReplyHeader>();

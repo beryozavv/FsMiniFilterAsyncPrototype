@@ -57,6 +57,7 @@ internal class Program
                 };
                 var safeMessageHandle = new SafeHGlobalHandle();
                 safeMessageHandle.SetHandle(Marshal.AllocHGlobal(MsgSize));
+                MarkReaderMessage message;
                 using (safeMessageHandle)
                 {
                     var messagePtr = safeMessageHandle.DangerousGetHandle();
@@ -72,11 +73,13 @@ internal class Program
                         throw new Exception($"FilterGetMessage failed. Error code: 0x{lastError:X}");
                     }
 
-                    var message = await WaitForEventAsync(overlapped.EventHandle, messagePtr);
+                    
+                    message = await WaitForEventAsync(overlapped.EventHandle, messagePtr);
                     var contentString = Encoding.UTF8.GetString(message.Notification.Contents);
-                    Console.WriteLine($"{message.MessageHeader.MessageId}; Content: {contentString.Substring(0, (int)message.Notification.Size)}");
-                    SendReplyToMessage(message);
+                    Console.WriteLine($"{message.Header.MessageId}; Content: {contentString.Substring(0, 50)}");
+                    
                 }
+                SendReplyToMessage(message);
             }
         }
     }
@@ -108,7 +111,7 @@ internal class Program
 
         var reply = new MarkReaderReplyMessage
         {
-            ReplyHeader = new FilterReplyHeader { MessageId = result.MessageHeader.MessageId, Status = 0 },
+            ReplyHeader = new FilterReplyHeader { MessageId = result.Header.MessageId, Status = 0 },
             Reply = new MarkReaderReply { Rights = (byte)rights }
         };
 

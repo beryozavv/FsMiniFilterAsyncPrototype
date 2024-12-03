@@ -1,13 +1,18 @@
 ﻿namespace ClientPrototype.Dto;
 
-public class RequestNotification
+public record RequestNotification : BaseDto
 {
-    public ulong MessageId { get; }
-    public byte[] Contents { get; }
+    public int ContentSize { get; init; }
+    public byte[] Contents { get; } = null!;
 
-    public RequestNotification(ulong messageId, byte[] contents)
+    public RequestNotification(Guid commandId): base(commandId)
     {
-        MessageId = messageId;
+        
+    }
+
+    public RequestNotification(Guid commandId, ulong messageId, byte[] contents, int contentSize):base(commandId, messageId)
+    {
         Contents = contents;
+        ContentSize = contentSize;
     }
 }
