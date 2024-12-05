@@ -13,7 +13,7 @@ if (string.IsNullOrWhiteSpace(testDir))
     throw new ArgumentNullException(nameof(testDir));
 }
 
-for (int i = 0; i < 20; i++)
+for (int i = 0; i < 50; i++)
 {
     var fileName = string.Format(fileNameTemplate, DateTimeOffset.Now.ToString().Replace(':', '_'), i);
     await CreateFile(Path.Combine(testDir, fileName));
@@ -26,27 +26,35 @@ await Test(testDir, existingFiles);
 static async Task Test(string testDir, List<string> existingFiles)
 {
     var random = new Random();
-    for (int i = 0; i < 20; i++)
+    while (true)
     {
-        var tasks = new List<Task>();
-        for (int j = 0; j < 10; j++)
+        try
         {
-            if (j % 2 == 0)
+            var tasks = new List<Task>();
+            for (int j = 0; j < 10; j++)
             {
-                var fileName = string.Format(fileNameTemplate, DateTimeOffset.Now.ToString().Replace(':', '_'), Guid.NewGuid());
-                var fullFilePath = Path.Combine(testDir, fileName);
-                tasks.Add(Task.Run(() => CreateFile(fullFilePath)));
+                if (j % 2 == 0)
+                {
+                    var fileName = string.Format(fileNameTemplate, DateTimeOffset.Now.ToString().Replace(':', '_'),
+                        Guid.NewGuid());
+                    var fullFilePath = Path.Combine(testDir, fileName);
+                    tasks.Add(Task.Run(() => CreateFile(fullFilePath)));
+                }
+                else
+                {
+                    var existingFile = existingFiles[random.Next(0, existingFiles.Count)];
+                    tasks.Add(Task.Run(() => Rewrite(existingFile)));
+                }
             }
-            else
-            {
-                var existingFile = existingFiles[random.Next(0, existingFiles.Count)];
-                tasks.Add(Task.Run(() => Rewrite(existingFile)));
-            }
+
+            await Task.WhenAll(tasks);
         }
-
-        await Task.WhenAll(tasks);
+        catch (Exception e)
+        {
+            Console.WriteLine(e);
+        }
     }
-
+    // ReSharper disable once FunctionNeverReturns
 }
 
 static async Task CreateFile(string fullFilePath)
