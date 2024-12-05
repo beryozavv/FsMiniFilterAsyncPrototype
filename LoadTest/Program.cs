@@ -31,6 +31,7 @@ static async Task Test(string testDir, List<string> existingFiles)
         try
         {
             var tasks = new List<Task>();
+            var createdFiles = new List<string>();
             for (int j = 0; j < 10; j++)
             {
                 if (j % 2 == 0)
@@ -39,6 +40,7 @@ static async Task Test(string testDir, List<string> existingFiles)
                         Guid.NewGuid());
                     var fullFilePath = Path.Combine(testDir, fileName);
                     tasks.Add(Task.Run(() => CreateFile(fullFilePath)));
+                    createdFiles.Add(fullFilePath);
                 }
                 else
                 {
@@ -48,6 +50,11 @@ static async Task Test(string testDir, List<string> existingFiles)
             }
 
             await Task.WhenAll(tasks);
+
+            foreach (var createdFilePath in createdFiles)
+            {
+                DeleteFile(createdFilePath);
+            }
         }
         catch (Exception e)
         {
@@ -60,6 +67,11 @@ static async Task Test(string testDir, List<string> existingFiles)
 static async Task CreateFile(string fullFilePath)
 {
     await File.WriteAllTextAsync(fullFilePath, "New Driver test", Encoding.UTF8);
+}
+
+static void DeleteFile(string fullFilePath)
+{
+    File.Delete(fullFilePath);
 }
 
 static async Task Rewrite(string fullFilePath)
