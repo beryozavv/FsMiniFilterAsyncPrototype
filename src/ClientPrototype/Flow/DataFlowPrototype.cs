@@ -88,7 +88,7 @@ internal class DataFlowPrototype : INotificationFlow
         catch (Exception e)
         {
             // фатальная ошибка
-            throw new DriverClientException("Sending DF command to buffer failed ", e);
+            throw new CriticalDriverCommunicationException("Sending DF command to buffer failed ", e);
         }
     }
 
@@ -113,7 +113,7 @@ internal class DataFlowPrototype : INotificationFlow
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "notification failed {RequestCommandId}, {RequestMessageId}, rights={Rights}",
+            _logger.LogCritical(e, "notification failed {RequestCommandId}, {RequestMessageId}, rights={Rights}",
                 notification.CommandId, notification.MessageId, rights);
             throw; //todo
             // завершение работы флоу
@@ -133,8 +133,10 @@ internal class DataFlowPrototype : INotificationFlow
                 command.Id, message.MessageId, contentString.Substring(0, 50));
             return message;
         }
-        catch (DriverClientException)
+        catch (CriticalDriverCommunicationException ex)
         {
+            _logger.LogCritical(ex, "GetNotification failed {RequestCommandId}, {RequestMessageId}",
+                command.Id, message?.MessageId);
             throw; //todo
             // завершение работы флоу
         }
@@ -179,8 +181,10 @@ internal class DataFlowPrototype : INotificationFlow
 
             return serverEvent;
         }
-        catch (DriverClientException)
+        catch (CriticalDriverCommunicationException ex)
         {
+            _logger.LogCritical(ex, "notification failed {RequestCommandId}, {RequestMessageId}, rights={Rights}",
+                notification.CommandId, notification.MessageId, rights);
             throw; //todo
             // завершение работы флоу
         }

@@ -52,7 +52,7 @@ internal class WinDriverClient : IDriverClient
             {
                 if (safeEventHandle.IsInvalid)
                 {
-                    throw new DriverClientException("Не удалось создать событие.");
+                    throw new CriticalDriverCommunicationException("Не удалось создать событие.");
                 }
 
                 var overlapped = new NativeOverlapped
@@ -73,7 +73,7 @@ internal class WinDriverClient : IDriverClient
                     if (ioResult != DriverConstants.ErrorIoPending)
                     {
                         var lastError = Marshal.GetLastWin32Error();
-                        throw new DriverClientException($"FilterGetMessage failed. Error code: 0x{lastError:X}");
+                        throw new CriticalDriverCommunicationException($"FilterGetMessage failed. Error code: 0x{lastError:X}");
                     }
 
                     var message = await overlapped.EventHandle.WaitForMessageAsync<MarkReaderMessage>(messagePtr);
@@ -87,7 +87,7 @@ internal class WinDriverClient : IDriverClient
         }
         catch (Exception e)
         {
-            throw new DriverClientException("ReadNotification Error", e);
+            throw new CriticalDriverCommunicationException("ReadNotification Error", e);
         }
     }
 
@@ -114,7 +114,7 @@ internal class WinDriverClient : IDriverClient
 
                 if (replyResult != DriverConstants.Ok)
                 {
-                    throw new DriverClientException($"Reply failed. Error code: 0x{replyResult:X}");
+                    throw new CriticalDriverCommunicationException($"Reply failed. Error code: 0x{replyResult:X}");
                 }
 
                 return replyResult;
@@ -122,7 +122,7 @@ internal class WinDriverClient : IDriverClient
         }
         catch (Exception e)
         {
-            throw new DriverClientException("Reply Error", e);
+            throw new CriticalDriverCommunicationException("Reply Error", e);
         }
     }
 
@@ -153,7 +153,7 @@ internal class WinDriverClient : IDriverClient
 
         if (hr != DriverConstants.Ok)
         {
-            throw new DriverClientException($"Error connect to driver. ErrorCode: 0x{hr:X8}");
+            throw new CriticalDriverCommunicationException($"Error connect to driver. ErrorCode: 0x{hr:X8}");
         }
     }
 
@@ -164,7 +164,7 @@ internal class WinDriverClient : IDriverClient
         _logger.LogDebug("Try to load driver {Name}", filterName);
         if (string.IsNullOrEmpty(filterName))
         {
-            throw new DriverClientException($"Invalid setting {nameof(filterName)}");
+            throw new CriticalDriverCommunicationException($"Invalid setting {nameof(filterName)}");
         }
 
         _logger.LogDebug("Try to enable privileges");
@@ -186,7 +186,7 @@ internal class WinDriverClient : IDriverClient
 
         if (string.IsNullOrEmpty(filterName))
         {
-            throw new DriverClientException($"Invalid setting {nameof(filterName)}");
+            throw new CriticalDriverCommunicationException($"Invalid setting {nameof(filterName)}");
         }
 
         PrivilegeManager.EnableCurrentProcessPrivilege(PrivilegeManager.SeLoadDriverPrivilege);
