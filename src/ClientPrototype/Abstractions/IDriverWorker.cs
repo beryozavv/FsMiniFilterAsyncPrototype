@@ -5,9 +5,12 @@ public interface IDriverWorker
     /// <summary>
     /// Начать обработку сообщений от драйвера
     /// </summary>
-    /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    Task Watch(CancellationToken cancellationToken);
-    
-    Task Stop(CancellationToken cancellationToken);
+    Task Watch();
+
+    /// <summary>
+    /// Остановить обработку, отключиться от драйвера и выгрузить драйвер
+    /// </summary>
+    /// <returns></returns>
+    Task Stop();
 }

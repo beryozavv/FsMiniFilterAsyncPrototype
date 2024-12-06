@@ -73,10 +73,12 @@ internal class WinDriverClient : IDriverClient
                     if (ioResult != DriverConstants.ErrorIoPending)
                     {
                         var lastError = Marshal.GetLastWin32Error();
-                        throw new CriticalDriverCommunicationException($"FilterGetMessage failed. Error code: 0x{lastError:X}");
+                        throw new CriticalDriverCommunicationException(
+                            $"FilterGetMessage failed. Error code: 0x{lastError:X}");
                     }
 
-                    var message = await overlapped.EventHandle.WaitForMessageAsync<MarkReaderMessage>(messagePtr);
+                    var message = await overlapped.EventHandle.WaitForMessageAsync<MarkReaderMessage>(messagePtr,
+                            cancellationToken);
 
                     var notificationRes =
                         new RequestNotification(commandId, message.Header.MessageId, message.Notification.Contents,
@@ -114,6 +116,8 @@ internal class WinDriverClient : IDriverClient
 
                 if (replyResult != DriverConstants.Ok)
                 {
+                    //todo 
+                    // Reply failed. Error code: 0x801F0020 является ли 0x801F0020 критичной ошибкой и поводом к перезапуску драйвера?
                     throw new CriticalDriverCommunicationException($"Reply failed. Error code: 0x{replyResult:X}");
                 }
 
@@ -126,8 +130,9 @@ internal class WinDriverClient : IDriverClient
         }
     }
 
-    public void Disconnect(CancellationToken token)
+    public void Disconnect()
     {
+        _logger.LogInformation("Try to Disconnect");
         // Close port handle, it will cause return from FilterGetMessage
         var portIsValid = _portHandle is { IsClosed: false, IsInvalid: false };
         if (portIsValid)
@@ -141,7 +146,7 @@ internal class WinDriverClient : IDriverClient
 
     private void OpenConnection(string connectionName)
     {
-        _logger.LogDebug("Try to open communication port");
+        _logger.LogInformation("Try to open communication port");
         var hr = WindowsNativeMethods.FilterConnectCommunicationPort(
             connectionName,
             0,
@@ -161,13 +166,12 @@ internal class WinDriverClient : IDriverClient
     {
         var filterName = _driverSettings.DriverName;
 
-        _logger.LogDebug("Try to load driver {Name}", filterName);
+        _logger.LogInformation("Try to load driver {Name}", filterName);
         if (string.IsNullOrEmpty(filterName))
         {
             throw new CriticalDriverCommunicationException($"Invalid setting {nameof(filterName)}");
         }
 
-        _logger.LogDebug("Try to enable privileges");
         PrivilegeManager.EnableCurrentProcessPrivilege(PrivilegeManager.SeLoadDriverPrivilege);
 
         var hr = WindowsNativeMethods.FilterLoad(filterName);
@@ -189,6 +193,7 @@ internal class WinDriverClient : IDriverClient
             throw new CriticalDriverCommunicationException($"Invalid setting {nameof(filterName)}");
         }
 
+        _logger.LogInformation("Try to unload driver {Name}", filterName);
         PrivilegeManager.EnableCurrentProcessPrivilege(PrivilegeManager.SeLoadDriverPrivilege);
 
         var hr = WindowsNativeMethods.FilterUnload(filterName);

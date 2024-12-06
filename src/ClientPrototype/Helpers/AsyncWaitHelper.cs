@@ -14,7 +14,7 @@ public static class AsyncWaitHelper
         var tcs = new TaskCompletionSource();
         var regWaitHandle =
             ThreadPool.RegisterWaitForSingleObject(waitHandle, (_, _) => tcs.SetResult(), null, -1, true);
-        await tcs.Task;
+        await tcs.Task.ConfigureAwait(false);
         regWaitHandle.Unregister(null);
     }
 
@@ -23,26 +23,40 @@ public static class AsyncWaitHelper
     /// </summary>
     /// <param name="hEvent">Событие</param>
     /// <param name="messagePtr">Указатель на сообщение</param>
+    /// <param name="cancellationToken"></param>
     /// <typeparam name="TResult">Тип сообщения</typeparam>
     /// <returns>Сообщение</returns>
-    public static async Task<TResult> WaitForMessageAsync<TResult>(this IntPtr hEvent, IntPtr messagePtr)
+    public static async Task<TResult> WaitForMessageAsync<TResult>(this IntPtr hEvent, IntPtr messagePtr,
+        CancellationToken cancellationToken)
     {
         var tcs = new TaskCompletionSource<TResult>();
 
         var regWaitHandle = ThreadPool.RegisterWaitForSingleObject(
             new WaitHandleSafe(hEvent),
-            (cbState, _) =>
+            static (cbState, _) =>
             {
-                var message = Marshal.PtrToStructure<TResult>((IntPtr)cbState!);
-                tcs.SetResult(message!);
+                var (taskCompletionSource, state) = ((TaskCompletionSource<TResult>, IntPtr))cbState!;
+                var message = Marshal.PtrToStructure<TResult>(state!);
+                taskCompletionSource.TrySetResult(message!);
             },
-            messagePtr,
+            (tcs, messagePtr),
             -1,
             true
         );
 
-        var result = await tcs.Task;
-        regWaitHandle.Unregister(null);
-        return result;
+        using (cancellationToken.Register(() => { tcs.TrySetCanceled(cancellationToken); }))
+        {
+            try
+            {
+                var result = await tcs.Task.ConfigureAwait(false);
+                regWaitHandle.Unregister(null);
+                return result;
+            }
+            catch (Exception)
+            {
+                regWaitHandle.Unregister(null);
+                throw;
+            }
+        }
     }
 }

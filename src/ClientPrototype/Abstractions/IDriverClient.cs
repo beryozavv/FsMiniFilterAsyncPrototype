@@ -22,5 +22,5 @@ public interface IDriverClient
     /// <returns></returns>
     uint Reply(ReplyNotification replyDto);
 
-    void Disconnect(CancellationToken cancellationToken);
+    void Disconnect();
 }

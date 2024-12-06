@@ -97,6 +97,9 @@ static async Task Test(string testDir, List<string> existingFiles, string? drive
             Console.WriteLine($"DateTime={DateTime.Now:O}; Error in Iteration {iteration}; Exception: {e}");
         }
     }
+    //todo
+    // CTS и грациозное завершение теста с ожиданием завершения всех обращений к файлам? 
+    
     // ReSharper disable once FunctionNeverReturns
 }
 

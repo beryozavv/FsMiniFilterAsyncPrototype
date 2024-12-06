@@ -29,15 +29,13 @@ builder.Services.AddLogging(logging =>
     logging.AddNLog($"nlog.{env}.config");
 });
 
-var cancellationTokenSource = new CancellationTokenSource();
-
 var app = builder.Build();
 
 try
 {
-    await app.Services.GetRequiredService<IDriverWorker>().Watch(cancellationTokenSource.Token);
+    await app.Services.GetRequiredService<IDriverWorker>().Watch();
 }
 finally
 {
-    app.Services.GetRequiredService<IDriverClient>().Disconnect(CancellationToken.None);
+    await app.Services.GetRequiredService<IDriverWorker>().Stop();
 }
