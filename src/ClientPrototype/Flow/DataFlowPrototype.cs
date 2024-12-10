@@ -119,9 +119,7 @@ internal class DataFlowPrototype : INotificationFlow
 
     private async Task FailWithReplyAsync(RequestNotification notification)
     {
-        // todo
-        // rights из опций?
-        byte rights = 0;
+        int rights = _driverSettings.DefaultRights;
         try
         {
             await ReplyAndPostNext(notification.CommandId, notification.MessageId, rights);
@@ -192,7 +190,8 @@ internal class DataFlowPrototype : INotificationFlow
 
             // todo 
             // здесь выполняем всю логику проверок
-            rights = notification.Contents[0] == 78 && notification.Contents[1] == 79 ? 0 : 1;
+            rights = await CustomChecks(notification, _cancellationToken)
+                .WaitAsync(_driverSettings.CustomChecksTimeout, _cancellationToken);
         }
         catch (Exception ex)
         {
@@ -201,8 +200,7 @@ internal class DataFlowPrototype : INotificationFlow
 
             serverEvent.IsSuccess = false;
             serverEvent.NeedSendEvent = false;
-            rights = 0; // todo
-            // дефолтный из опций
+            rights = _driverSettings.DefaultRights;
         }
 
         try
@@ -227,6 +225,19 @@ internal class DataFlowPrototype : INotificationFlow
             serverEvent.NeedSendEvent = true;
             return serverEvent;
         }
+    }
+
+    /// <summary>
+    /// Здесь выполняем все необходимые проверки файла и обращения во внешние API
+    /// </summary>
+    /// <param name="notification"></param>
+    /// <param name="cancellationToken"></param>
+    /// <returns></returns>
+    private async Task<int> CustomChecks(RequestNotification notification, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var rights = notification.Contents[0] == 78 && notification.Contents[1] == 79 ? 0 : 1;
+        return await Task.FromResult(rights);
     }
 
     /// <summary>
